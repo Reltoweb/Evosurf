@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="logo.png" alt="EvoSurf" />
+  <img src="logo.png" alt="EvoSurf" width="280" />
 </p>
 
-# 🇺🇸 English
+# <img src="https://flagcdn.com/w40/us.png" width="24" height="18" alt="US" /> English
 
 # 🌊 EvoSurf — Traffic Exchange Platform
 
@@ -53,7 +53,7 @@ EvoSurf is a **traffic exchange platform** where you surf to earn credits and us
 
 ---
 
-# 🇫🇷 Français
+# <img src="https://flagcdn.com/w40/fr.png" width="24" height="18" alt="FR" /> Français
 
 # 🌊 EvoSurf — Plateforme d’échange de trafic
 
