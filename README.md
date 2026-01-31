@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.png" alt="EvoSurf" width="140" />
+  <img src="logo.png" alt="EvoSurf" />
 </p>
 
 # 🇺🇸 English
