@@ -1,6 +1,8 @@
 <p align="center">
-  <img src="https://www.evosurf.fr/public/images/logo.png" alt="EvoSurf" width="140" />
+  <img src="logo.png" alt="EvoSurf" width="140" />
 </p>
+
+# 🇺🇸 English
 
 # 🌊 EvoSurf — Traffic Exchange Platform
 
@@ -47,8 +49,11 @@ EvoSurf is a **traffic exchange platform** where you surf to earn credits and us
 ---
 
 <br>
+<br>
 
 ---
+
+# 🇫🇷 Français
 
 # 🌊 EvoSurf — Plateforme d’échange de trafic
 
