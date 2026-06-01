@@ -5,6 +5,7 @@ function normalizeVersion(value) {
     return String(value || '')
         .trim()
         .replace(/^viewer-headless-/i, '')
+        .replace(/^viewer-/i, '')
         .replace(/^headless-/i, '')
         .replace(/^v/i, '')
         .split(/[+-]/)[0];
@@ -94,10 +95,8 @@ async function checkForUpdate(config, logger) {
     const asset = getReleaseAsset(release);
 
     if (!latestVersion || compareVersions(latestVersion, currentVersion) <= 0) {
-        logger.info('Aucune mise a jour headless disponible', {
-            currentVersion,
-            latestVersion: latestVersion || null
-        });
+        logger.info(`Current version: ${normalizeVersion(currentVersion)}, Stable: ${normalizeVersion(latestVersion || currentVersion)}`);
+        logger.info('App is up to date');
         return null;
     }
 
@@ -108,10 +107,11 @@ async function checkForUpdate(config, logger) {
         downloadUrl: release.download_url || asset?.browser_download_url || null
     };
 
-    logger.warn('Mise a jour headless disponible', update);
+    logger.warn(`Update available: ${normalizeVersion(currentVersion)} -> ${normalizeVersion(latestVersion)}`);
+    logger.debug('Update details', update);
 
     if (config.updateExitOnAvailable) {
-        logger.warn('Arret du worker pour laisser le service installer la mise a jour');
+        logger.warn('Stopping worker so the service can install the update');
         process.exit(42);
     }
 
@@ -125,9 +125,7 @@ function scheduleUpdateChecks(config, logger) {
 
     setInterval(() => {
         checkForUpdate(config, logger).catch(error => {
-            logger.warn('Verification de mise a jour impossible', {
-                message: error.message
-            });
+            logger.warn(`Update check failed: ${error.message}`);
         });
     }, config.updateCheckIntervalMs).unref();
 }

@@ -1,23 +1,37 @@
-function createLogger(prefix = 'viewer') {
+function formatTimestamp(date = new Date()) {
+    const pad = value => String(value).padStart(2, '0');
+
+    return [
+        date.getFullYear(),
+        pad(date.getMonth() + 1),
+        pad(date.getDate())
+    ].join('/') + ' ' + [
+        pad(date.getHours()),
+        pad(date.getMinutes()),
+        pad(date.getSeconds())
+    ].join(':');
+}
+
+function createLogger(prefix = 'viewer', options = {}) {
+    const debugEnabled = options.debug === true;
+    const debugInteractions = options.debugInteractions === true;
+
     const write = (level, message, extra = null) => {
-        const entry = {
-            at: new Date().toISOString(),
-            level,
-            prefix,
-            message
-        };
+        if (level === 'debug' && !debugEnabled) return;
 
-        if (extra !== null && extra !== undefined) {
-            entry.extra = extra;
-        }
+        const levelLabel = level.toUpperCase().padEnd(5, ' ');
+        const line = `${formatTimestamp()} ${levelLabel} => ${message}`;
+        const shouldPrintExtra = debugEnabled && extra !== null && extra !== undefined;
 
-        const line = `[${entry.at}] [${prefix}] [${level.toUpperCase()}] ${message}`;
         if (level === 'error') {
-            console.error(line, extra || '');
+            if (shouldPrintExtra) console.error(line, extra);
+            else console.error(line);
         } else if (level === 'warn') {
-            console.warn(line, extra || '');
+            if (shouldPrintExtra) console.warn(line, extra);
+            else console.warn(line);
         } else {
-            console.log(line, extra || '');
+            if (shouldPrintExtra) console.log(line, extra);
+            else console.log(line);
         }
     };
 
@@ -25,10 +39,19 @@ function createLogger(prefix = 'viewer') {
         info: (message, extra) => write('info', message, extra),
         warn: (message, extra) => write('warn', message, extra),
         error: (message, extra) => write('error', message, extra),
-        interaction: (payload) => write('info', '[Surf][Interaction]', payload)
+        debug: (message, extra) => write('debug', message, extra),
+        interaction: (payload) => {
+            if (debugInteractions) {
+                write('debug', '[Surf][Interaction]', payload);
+            }
+        },
+        visit: (index, points, seconds, url) => {
+            write('info', `[${index}][${points} Points][${seconds} seconds]: ${url}`);
+        }
     };
 }
 
 module.exports = {
+    formatTimestamp,
     createLogger
 };

@@ -173,7 +173,9 @@ async function executeHumanScroll(adapter, scrollConfig = {}) {
     `;
 
     const result = await adapter.evaluate(script);
-    console.log('[Surf] Scroll execute:', result);
+    if (process.env.DEBUG_INTERACTIONS === 'true' || process.env.EVOSURF_DEBUG_INTERACTIONS === 'true') {
+        console.log('[Surf] Scroll execute:', result);
+    }
     return result;
 }
 
@@ -680,7 +682,9 @@ async function executeHumanClick(adapter, clickConfig = {}, allowedDomains = [])
         config.excludedHrefs = [...excludedHrefs];
         const script = buildClickScript(config);
         const result = await adapter.evaluate(script);
-        console.log('[Surf] Click execute:', JSON.stringify(result, null, 2));
+        if (process.env.DEBUG_INTERACTIONS === 'true' || process.env.EVOSURF_DEBUG_INTERACTIONS === 'true') {
+            console.log('[Surf] Click execute:', JSON.stringify(result, null, 2));
+        }
         aggregateResults.push({
             index: index + 1,
             ...result

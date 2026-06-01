@@ -28,6 +28,8 @@ function readConfig() {
         requestTimeoutMs: Number(process.env.REQUEST_TIMEOUT_MS || 15000),
         navigationTimeoutMs: Number(process.env.NAVIGATION_TIMEOUT_MS || 30000),
         headless: process.env.HEADLESS !== 'false',
+        logLevel: String(process.env.LOG_LEVEL || process.env.EVOSURF_LOG_LEVEL || 'info').trim().toLowerCase(),
+        debugInteractions: process.env.DEBUG_INTERACTIONS === 'true' || process.env.EVOSURF_DEBUG_INTERACTIONS === 'true',
         viewerRuntime: String(process.env.VIEWER_RUNTIME || process.env.EVOSURF_VIEWER_RUNTIME || 'headless').trim(),
         viewerPlatform: String(process.env.VIEWER_PLATFORM || process.env.EVOSURF_VIEWER_PLATFORM || process.platform).trim(),
         profileRoot: process.env.PROFILE_ROOT || path.resolve(process.cwd(), 'profiles'),

@@ -4,6 +4,7 @@ const { createLogger } = require('./logger');
 const { createPlaywrightSurfAdapter, launchBrowser } = require('./playwright-adapter');
 const { checkForUpdate, scheduleUpdateChecks } = require('./update-checker');
 const { delay, runVisit } = require('../../electron/viewer-core');
+const os = require('os');
 
 function getAllowedDomainsForUrl(url) {
     try {
@@ -73,21 +74,61 @@ function normalizeDurationSeconds(value) {
     return Math.max(5, Math.min(duration, 3600));
 }
 
+function getBitnessLabel() {
+    return process.arch.includes('64') ? '64 Bits' : '32 Bits';
+}
+
+function getPlatformLabel(config) {
+    const runtime = String(config.viewerRuntime || '').toLowerCase();
+    if (runtime === 'docker') return 'docker';
+    return String(config.viewerPlatform || process.platform || 'unknown').toLowerCase();
+}
+
+function formatPoints(value) {
+    const points = Number(value);
+    if (!Number.isFinite(points)) return '0';
+    return points.toFixed(2).replace(/\.?0+$/, '');
+}
+
+function logStartup(logger, config) {
+    logger.info('*'.repeat(80));
+    logger.info(`Starting EvoSurf Viewer... [Version: ${config.appVersion}] - ${getBitnessLabel()}`);
+    logger.info(`Mode: ${config.headless ? 'Console' : 'Visible'}`);
+    logger.info(`AutoUpdate is ${config.updateCheckEnabled ? 'activated' : 'disabled'}`);
+    logger.info('Connecting instance...');
+    logger.info('Get System Info');
+    logger.info(`[CPU]: ${os.cpus()[0]?.model || 'Unknown CPU'}`);
+    logger.info(`[Cores]: ${os.cpus().length || 1}`);
+    logger.info(`[Memory]: ${Math.round(os.totalmem() / 1024 / 1024)}`);
+    logger.info(`[OS]: ${getPlatformLabel(config)}`);
+    logger.info(`[OS Version]: ${os.type()} ${os.release()}`);
+    logger.info(`User: ${config.sessionId}`);
+    logger.info(`Version: ${config.appVersion}`);
+    logger.info('Get configuration...');
+    logger.info('Checking connection...');
+    logger.info('Connection: Ready');
+    logger.info('Surf is about to start');
+}
+
 async function runWorker() {
     const config = readConfig();
     assertConfig(config);
 
-    const logger = createLogger(`headless:${config.sessionId}`);
+    const logger = createLogger(`headless:${config.sessionId}`, {
+        debug: config.logLevel === 'debug',
+        debugInteractions: config.debugInteractions || config.logLevel === 'debug'
+    });
     const api = new ApiClient(config, logger);
 
     let stopping = false;
     let browser = null;
     let activeAdapter = null;
+    let visitCounter = 0;
 
     async function shutdown(signal) {
         if (stopping) return;
         stopping = true;
-        logger.warn(`Arret demande (${signal})`);
+        logger.warn(`Shutdown requested (${signal})`);
 
         if (activeAdapter) {
             await activeAdapter.stop().catch(() => {});
@@ -106,19 +147,10 @@ async function runWorker() {
         shutdown('SIGTERM').finally(() => process.exit(0));
     });
 
-    logger.info('Demarrage du worker EvoSurf headless', {
-        baseUrl: config.baseUrl,
-        sessionId: config.sessionId,
-        appVersion: config.appVersion,
-        headless: config.headless,
-        viewerRuntime: config.viewerRuntime,
-        viewerPlatform: config.viewerPlatform
-    });
+    logStartup(logger, config);
 
     await checkForUpdate(config, logger).catch(error => {
-        logger.warn('Verification de mise a jour impossible', {
-            message: error.message
-        });
+        logger.warn(`Update check failed: ${error.message}`);
     });
     scheduleUpdateChecks(config, logger);
 
@@ -131,17 +163,13 @@ async function runWorker() {
             mission = await api.getNextVisit();
         } catch (error) {
             const waitMs = error.status === 503 ? config.pollDelayMs : Math.max(config.pollDelayMs, 10000);
-            logger.warn('Impossible de recuperer une mission', {
-                status: error.status || null,
-                message: error.message,
-                waitMs
-            });
+            logger.warn(`Unable to get mission: ${error.status || 'network'} ${error.message}. Retry in ${Math.round(waitMs / 1000)} seconds`);
             await delay(waitMs);
             continue;
         }
 
         if (!mission?.url || !mission?.view_token) {
-            logger.info('Aucune visite disponible', {
+            logger.debug('No visit available', {
                 duration: mission?.duration || 0
             });
             await delay(config.pollDelayMs);
@@ -150,11 +178,6 @@ async function runWorker() {
 
         const durationSeconds = normalizeDurationSeconds(mission.duration);
         activeAdapter = createPlaywrightSurfAdapter({ browser, config, logger });
-
-        logger.info('Mission recue', {
-            url: mission.url,
-            durationSeconds
-        });
 
         try {
             const visitConfig = buildVisitConfigFromApi(mission);
@@ -173,13 +196,11 @@ async function runWorker() {
             }
 
             const validation = await api.validateVisit(mission.view_token);
-            logger.info('Visite validee', {
-                creditsEarned: validation.credits_earned ?? null,
-                status: validation.status || 'success'
-            });
+            visitCounter += 1;
+            logger.visit(visitCounter, formatPoints(validation.credits_earned), durationSeconds, mission.url);
         } catch (error) {
-            logger.error('Echec de la mission', {
-                message: error.message,
+            logger.error(`Mission failed: ${error.message}`);
+            logger.debug('Mission failure details', {
                 url: mission.url
             });
         } finally {
@@ -194,6 +215,6 @@ async function runWorker() {
 }
 
 runWorker().catch(error => {
-    console.error('[viewer-headless] Erreur fatale', error);
+    console.error('[viewer-headless] Fatal error', error);
     process.exit(1);
 });

@@ -114,7 +114,7 @@ function createPlaywrightSurfAdapter({ browser, config, logger }) {
                 }).catch(() => {});
             }
 
-            logger.info('Chargement de la page', {
+            logger.debug('Loading page', {
                 url,
                 viewport: contextOptions.viewport,
                 isMobile: contextOptions.isMobile,

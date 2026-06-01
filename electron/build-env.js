@@ -63,7 +63,7 @@ if (fs.existsSync(iconPng)) {
 }
 
 // Nom de l'exécutable Windows : EvoSurfViewer-win-{version}
-const version = electronPkg.version || '1.1.0';
+const version = electronPkg.version || '1.1.1';
 if (!electronPkg.build) electronPkg.build = {};
 if (!electronPkg.build.win) electronPkg.build.win = {};
 electronPkg.build.win.executableName = `EvoSurfViewer-win-${version}`;

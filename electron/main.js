@@ -47,6 +47,7 @@ ipcMain.handle('get-app-version', () => app.getVersion());
 let mainWindow;
 let surfView;
 let surfVisitSerial = 0;
+const debugInteractions = process.env.DEBUG_INTERACTIONS === 'true' || process.env.EVOSURF_DEBUG_INTERACTIONS === 'true';
 
 let DEFAULT_CLIENT_URL;
 try {
@@ -204,7 +205,9 @@ function emitSurfInteractionLog(payload) {
         ...payload
     };
 
-    console.log('[Surf][Interaction]', JSON.stringify(entry, null, 2));
+    if (debugInteractions) {
+        console.log('[Surf][Interaction]', JSON.stringify(entry, null, 2));
+    }
 
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('surf-interaction-log', entry);
