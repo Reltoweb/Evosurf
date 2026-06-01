@@ -1,0 +1,22 @@
+[Unit]
+Description=EvoSurf headless viewer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/evosurf-viewer-headless/viewer-headless
+EnvironmentFile=/opt/evosurf-viewer-headless/.env
+Environment=VIEWER_RUNTIME=headless
+Environment=VIEWER_PLATFORM=linux
+Environment=UPDATE_CHECK_ENABLED=true
+Environment=UPDATE_EXIT_ON_AVAILABLE=true
+Environment=UPDATE_CHECK_INTERVAL_MS=3600000
+Environment=EVOSURF_RELEASE_REPOSITORY=Reltoweb/Evosurf
+ExecStartPre=/opt/evosurf-viewer-headless/viewer-headless/scripts/update-headless-linux.sh
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

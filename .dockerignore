@@ -1,0 +1,6 @@
+*
+!viewer-headless/
+!viewer-headless/**
+!electron/
+!electron/viewer-core/
+!electron/viewer-core/**

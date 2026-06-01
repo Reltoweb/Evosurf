@@ -1,0 +1,122 @@
+name: Viewer Release
+
+on:
+  push:
+    tags:
+      - "viewer-v*"
+      - "viewer-headless-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  linux-docker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: viewer-headless/package-lock.json
+
+      - name: Check worker
+        working-directory: viewer-headless
+        run: |
+          npm ci
+          npm run check
+
+      - name: Build Linux archive
+        run: |
+          mkdir -p dist
+          tar \
+            --exclude='viewer-headless/node_modules' \
+            --exclude='viewer-headless/profiles' \
+            --exclude='viewer-headless/.env' \
+            -czf dist/evosurf-viewer-headless-linux.tar.gz \
+            viewer-headless electron/viewer-core
+
+      - name: Upload Linux archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: evosurf-viewer-headless-linux
+          path: dist/evosurf-viewer-headless-linux.tar.gz
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        shell: bash
+        run: |
+          owner="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          version="${GITHUB_REF_NAME:-manual}"
+          version="${version#viewer-v}"
+          version="${version#viewer-headless-v}"
+          image="ghcr.io/${owner}/evosurf-viewer-headless"
+          docker build -f viewer-headless/Dockerfile -t "${image}:latest" -t "${image}:${version}" .
+          docker push "${image}:latest"
+          docker push "${image}:${version}"
+
+  windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: electron/package-lock.json
+
+      - name: Build Windows viewer
+        working-directory: electron
+        env:
+          CLIENT_URL: https://www.evosurf.fr/surf/client
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Upload Windows installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: evosurf-viewer-windows
+          path: electron/dist/EvoSurfViewer-win-*.exe
+
+  release:
+    needs:
+      - linux-docker
+      - windows
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="${GITHUB_REF_NAME:-viewer-manual}"
+          files="$(find dist -type f)"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" $files --clobber
+          else
+            gh release create "$tag" $files --title "$tag" --notes "EvoSurf viewer Windows installer, headless Linux archive and Docker image."
+          fi

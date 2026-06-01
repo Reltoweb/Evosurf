@@ -1,0 +1,20 @@
+services:
+  viewer-1:
+    image: ghcr.io/reltoweb/evosurf-viewer-headless:latest
+    restart: unless-stopped
+    environment:
+      EVOSURF_BASE_URL: "https://www.evosurf.fr"
+      ACCESS_KEY: "REMPLACE_MOI"
+      SESSION_ID: "viewer-1"
+      VIEWER_RUNTIME: "docker"
+      VIEWER_PLATFORM: "linux"
+      EVOSURF_RELEASE_REPOSITORY: "Reltoweb/Evosurf"
+      UPDATE_CHECK_ENABLED: "true"
+      UPDATE_EXIT_ON_AVAILABLE: "false"
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 300 --cleanup viewer-1

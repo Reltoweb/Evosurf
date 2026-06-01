@@ -1,0 +1,14 @@
+﻿node_modules/
+electron/node_modules/
+electron/dist/
+electron/build/
+electron/assets/
+electron/config.json
+electron/default-client-url.js
+viewer-headless/node_modules/
+viewer-headless/profiles/
+viewer-headless/.env
+viewer-headless/.env.*
+viewer-headless/dist/
+viewer-headless/*.tgz
+viewer-headless/*.tar.gz

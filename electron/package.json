@@ -1,0 +1,90 @@
+{
+    "name": "evosurf-client",
+    "version": "1.1.0",
+    "description": "Official EvoSurf Viewer",
+    "main": "main.js",
+    "scripts": {
+        "start": "electron .",
+        "icon": "node convert_icon.js",
+        "build": "node build-env.js && electron-builder",
+        "build:clean": "node build-env.js && node -e \"const fs=require('fs'); ['dist','app'].forEach(d=>{if(fs.existsSync(d)){fs.rmSync(d,{recursive:true});console.log(d+'/ supprimé');}})\" && electron-builder",
+        "build:secure": "node build-env.js && node build_obfuscated.js && cd app && npm install --production && cd .. && electron-builder",
+        "pack": "electron-builder --dir",
+        "deploy": "npm run build:secure -- --publish always"
+    },
+    "build": {
+        "appId": "com.evosurf.client",
+        "productName": "EvoSurf",
+        "artifactName": "${productName}-Setup-${version}.${ext}",
+        "directories": {
+            "output": "dist",
+            "buildResources": "build"
+        },
+        "extraMetadata": {
+            "name": "EvoSurf",
+            "description": "Official EvoSurf Viewer"
+        },
+        "win": {
+            "target": "nsis",
+            "icon": "assets/icon.ico",
+            "publish": [
+                "github"
+            ],
+            "signAndEditExecutable": false,
+            "artifactName": "EvoSurfViewer-win-${version}.${ext}",
+            "executableName": "EvoSurfViewer-win-1.1.0"
+        },
+        "afterPack": "scripts/after-pack.js",
+        "nsis": {
+            "oneClick": false,
+            "perMachine": false,
+            "allowElevation": true,
+            "allowToChangeInstallationDirectory": true,
+            "createDesktopShortcut": true,
+            "differentialPackage": false,
+            "deleteAppDataOnUninstall": false,
+            "runAfterFinish": true
+        },
+        "publish": {
+            "provider": "github",
+            "owner": "Reltoweb",
+            "repo": "Evosurf"
+        },
+        "asar": true,
+        "files": [
+            "main.js",
+            "preload.js",
+            "secure_storage.js",
+            "viewer-core/**",
+            "default-client-url.js",
+            "config.json",
+            "icon.ico",
+            "icon.png",
+            "node_modules/**",
+            "!app/**",
+            "!**/*.map",
+            "!**/*.md",
+            "!docs/*",
+            "!.git/*",
+            "!.env",
+            "!dist/**"
+        ]
+    },
+    "author": "AutoSurf",
+    "license": "ISC",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/Reltoweb/Evosurf.git"
+    },
+    "devDependencies": {
+        "electron": "^28.0.0",
+        "electron-builder": "^26.4.0",
+        "electron-packager": "^17.1.2",
+        "javascript-obfuscator": "^5.2.0",
+        "png-to-ico": "^3.0.1"
+    },
+    "dependencies": {
+        "electron-updater": "^6.3.9",
+        "jimp": "^1.6.0"
+    }
+}

@@ -1,0 +1,27 @@
+x-viewer: &viewer
+  build:
+    context: ..
+    dockerfile: viewer-headless/Dockerfile
+  image: evosurf-viewer-headless:local
+  restart: unless-stopped
+
+services:
+  viewer-1:
+    <<: *viewer
+    environment:
+      EVOSURF_BASE_URL: "https://www.evosurf.fr"
+      ACCESS_KEY: "REMPLACE_MOI"
+      SESSION_ID: "viewer-1"
+      APP_VERSION: "headless-1.1.0"
+      VIEWER_RUNTIME: "docker"
+      VIEWER_PLATFORM: "linux"
+
+  viewer-2:
+    <<: *viewer
+    environment:
+      EVOSURF_BASE_URL: "https://www.evosurf.fr"
+      ACCESS_KEY: "REMPLACE_MOI"
+      SESSION_ID: "viewer-2"
+      APP_VERSION: "headless-1.1.0"
+      VIEWER_RUNTIME: "docker"
+      VIEWER_PLATFORM: "linux"
