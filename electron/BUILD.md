@@ -46,7 +46,7 @@ npm run build
 
 Après le build :
 
-- **`electron/dist/win-unpacked/`** contient **EvoSurfViewer-win-{version}.exe** (ex. `EvoSurfViewer-win-1.1.1.exe`) et les fichiers nécessaires (DLL, ffmpeg, etc.). Lance cet exe pour ouvrir le client.
+- **`electron/dist/win-unpacked/`** contient **EvoSurfViewer-win-{version}.exe** (ex. `EvoSurfViewer-win-1.1.2.exe`) et les fichiers nécessaires (DLL, ffmpeg, etc.). Lance cet exe pour ouvrir le client.
 
 **Important – ffmpeg.dll / déplacer l’exe** : le .exe a besoin des DLL (dont **ffmpeg.dll**) qui sont dans le même dossier.  
 - **Ne copie pas uniquement** l’exe (par ex. sur le Bureau) : tu aurais « ffmpeg.dll introuvable ».  

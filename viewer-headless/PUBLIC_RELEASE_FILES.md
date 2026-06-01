@@ -81,18 +81,18 @@ viewer-headless/profiles/
 Dans le repo public, pousse un tag :
 
 ```bash
-git tag viewer-v1.1.1
-git push origin viewer-v1.1.1
+git tag viewer-v1.1.2
+git push origin viewer-v1.1.2
 ```
 
 Le workflow publie :
 
 ```text
-EvoSurfViewer-win-1.1.1.exe
+EvoSurfViewer-win-1.1.2.exe
 evosurf-viewer-headless-linux.tar.gz
 evosurf/viewer:stable
 evosurf/viewer:latest
-evosurf/viewer:1.1.1
+evosurf/viewer:1.1.2
 ```
 
 Le VPS doit utiliser `EVOSURF_RELEASE_REPOSITORY=Reltoweb/Evosurf`.
