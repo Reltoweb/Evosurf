@@ -69,7 +69,7 @@ Publie une release GitHub avec :
 
 - `EvoSurfViewer-win-1.1.1.exe` pour Windows.
 - `dist/evosurf-viewer-headless-linux.tar.gz` pour Linux direct.
-- l'image Docker `ghcr.io/reltoweb/evosurf-viewer-headless:latest` pour Docker.
+- l'image Docker `evosurf/viewer:stable` pour Docker.
 
 Le workflow fourni dans `viewer-headless/public-repo/.github/workflows/viewer-headless-release.yml` doit etre copie dans le repo public a l'emplacement `.github/workflows/viewer-headless-release.yml`. Il genere les assets automatiquement quand tu pousses un tag :
 
@@ -139,4 +139,4 @@ Edite `docker-compose.yml`, remplace `ACCESS_KEY` et `SESSION_ID`, puis lance :
 docker compose up -d
 ```
 
-Watchtower verifiera l'image `ghcr.io/reltoweb/evosurf-viewer-headless:latest`, la telechargera quand elle change, puis redemarrera le conteneur.
+Watchtower verifiera l'image `evosurf/viewer:stable`, la telechargera quand elle change, puis redemarrera le conteneur.

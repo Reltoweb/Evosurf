@@ -28,6 +28,7 @@ electron/scripts/
 electron/viewer-core/
 
 viewer-headless/Dockerfile
+viewer-headless/DOCKERHUB_README.md
 viewer-headless/README.md
 viewer-headless/docker-compose.release.yml
 viewer-headless/docker-compose.example.yml
@@ -89,8 +90,9 @@ Le workflow publie :
 ```text
 EvoSurfViewer-win-1.1.1.exe
 evosurf-viewer-headless-linux.tar.gz
-ghcr.io/reltoweb/evosurf-viewer-headless:latest
-ghcr.io/reltoweb/evosurf-viewer-headless:1.1.1
+evosurf/viewer:stable
+evosurf/viewer:latest
+evosurf/viewer:1.1.1
 ```
 
 Le VPS doit utiliser `EVOSURF_RELEASE_REPOSITORY=Reltoweb/Evosurf`.

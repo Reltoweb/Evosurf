@@ -55,6 +55,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: evosurf
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Build and push Docker image
         shell: bash
         run: |
@@ -62,10 +68,30 @@ jobs:
           version="${GITHUB_REF_NAME:-manual}"
           version="${version#viewer-v}"
           version="${version#viewer-headless-v}"
-          image="ghcr.io/${owner}/evosurf-viewer-headless"
-          docker build -f viewer-headless/Dockerfile -t "${image}:latest" -t "${image}:${version}" .
-          docker push "${image}:latest"
-          docker push "${image}:${version}"
+          ghcr_image="ghcr.io/${owner}/evosurf-viewer-headless"
+          dockerhub_image="evosurf/viewer"
+          docker build \
+            -f viewer-headless/Dockerfile \
+            -t "${ghcr_image}:latest" \
+            -t "${ghcr_image}:${version}" \
+            -t "${dockerhub_image}:stable" \
+            -t "${dockerhub_image}:latest" \
+            -t "${dockerhub_image}:${version}" \
+            .
+          docker push "${ghcr_image}:latest"
+          docker push "${ghcr_image}:${version}"
+          docker push "${dockerhub_image}:stable"
+          docker push "${dockerhub_image}:latest"
+          docker push "${dockerhub_image}:${version}"
+
+      - name: Update Docker Hub description
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: evosurf
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: evosurf/viewer
+          readme-filepath: ./viewer-headless/DOCKERHUB_README.md
+          short-description: Official EvoSurf headless viewer for Docker.
 
   windows:
     runs-on: windows-latest

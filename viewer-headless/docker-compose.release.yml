@@ -1,6 +1,6 @@
 services:
   viewer-1:
-    image: ghcr.io/reltoweb/evosurf-viewer-headless:latest
+    image: evosurf/viewer:stable
     restart: unless-stopped
     environment:
       EVOSURF_BASE_URL: "https://www.evosurf.fr"
