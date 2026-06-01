@@ -16,79 +16,153 @@ docker run -d \
 
 Replace `YOUR_ACCESS_KEY` with the access key from your EvoSurf dashboard.
 
-## Recommended VPS Setup
+Disclaimer: Never share your access key as it allows access to your EvoSurf viewer account.
 
-Docker Compose is recommended when running EvoSurf Viewer on a VPS.
+## Environment Variables
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `ACCESS_KEY` | Yes | Your EvoSurf access key for authentication. |
+| `SESSION_ID` | No | Unique viewer name. Recommended when running multiple containers. |
+| `VIEWER_RUNTIME` | No | Runtime label reported to EvoSurf. Use `docker` for Docker installs. |
+| `VIEWER_PLATFORM` | No | Platform label reported to EvoSurf. Use `linux` for VPS installs. |
+
+## Docker Compose Examples
+
+### Single Container
+
+Create a `docker-compose.yml` file:
+
+```yaml
+services:
+  viewer:
+    image: evosurf/viewer:stable
+    environment:
+      - ACCESS_KEY=${ACCESS_KEY}
+      - SESSION_ID=viewer-1
+      - VIEWER_RUNTIME=docker
+      - VIEWER_PLATFORM=linux
+    restart: unless-stopped
+    tmpfs:
+      - /tmp
+      - /dev/shm
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+
+Create a `.env` file with your access key:
 
 ```bash
-mkdir -p ~/evosurf-viewer
-cd ~/evosurf-viewer
-curl -fsSL https://raw.githubusercontent.com/Reltoweb/Evosurf/main/viewer-headless/docker-compose.release.yml -o docker-compose.yml
-nano docker-compose.yml
+ACCESS_KEY=your_secret_access_key_here
+```
+
+Then run:
+
+```bash
 docker compose up -d
 ```
 
-The default Compose file includes Watchtower, so your viewer can restart automatically when a new `evosurf/viewer:stable` image is published.
+### Multiple Containers
 
-## Multiple Viewers
-
-To run several viewer sessions on the same VPS, duplicate the viewer service in `docker-compose.yml`.
-
-Each viewer should have:
-
-- the same or another `ACCESS_KEY`
-- a different `SESSION_ID`
-- a unique service name
-
-Example:
+To run multiple viewers simultaneously, create a `docker-compose.yml` file:
 
 ```yaml
 services:
   viewer-1:
     image: evosurf/viewer:stable
-    restart: unless-stopped
     environment:
-      ACCESS_KEY: "YOUR_ACCESS_KEY"
-      SESSION_ID: "viewer-1"
-      VIEWER_RUNTIME: "docker"
-      VIEWER_PLATFORM: "linux"
+      - ACCESS_KEY=${ACCESS_KEY}
+      - SESSION_ID=viewer-1
+      - VIEWER_RUNTIME=docker
+      - VIEWER_PLATFORM=linux
+    restart: unless-stopped
+    tmpfs:
+      - /tmp
+      - /dev/shm
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   viewer-2:
     image: evosurf/viewer:stable
-    restart: unless-stopped
     environment:
-      ACCESS_KEY: "YOUR_ACCESS_KEY"
-      SESSION_ID: "viewer-2"
-      VIEWER_RUNTIME: "docker"
-      VIEWER_PLATFORM: "linux"
+      - ACCESS_KEY=${ACCESS_KEY}
+      - SESSION_ID=viewer-2
+      - VIEWER_RUNTIME=docker
+      - VIEWER_PLATFORM=linux
+    restart: unless-stopped
+    tmpfs:
+      - /tmp
+      - /dev/shm
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   viewer-3:
     image: evosurf/viewer:stable
-    restart: unless-stopped
     environment:
-      ACCESS_KEY: "YOUR_ACCESS_KEY"
-      SESSION_ID: "viewer-3"
-      VIEWER_RUNTIME: "docker"
-      VIEWER_PLATFORM: "linux"
-
-  watchtower:
-    image: containrrr/watchtower:latest
+      - ACCESS_KEY=${ACCESS_KEY}
+      - SESSION_ID=viewer-3
+      - VIEWER_RUNTIME=docker
+      - VIEWER_PLATFORM=linux
     restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 300 --cleanup viewer-1 viewer-2 viewer-3
+    tmpfs:
+      - /tmp
+      - /dev/shm
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 ```
 
-Then start everything:
+Create a `.env` file with your access key:
+
+```bash
+ACCESS_KEY=your_secret_access_key_here
+```
+
+Then run:
 
 ```bash
 docker compose up -d
 ```
 
-Check logs:
+## Resource Recommendations
+
+Memory: 1 GB minimum per container, 2 GB recommended.
+
+CPU: 1 core minimum per container, 2 cores recommended.
+
+tmpfs: Mount `/tmp` and `/dev/shm` as tmpfs for better browser performance.
+
+Start with 1 to 3 viewers on a small VPS, then increase slowly if the logs stay stable.
+
+## Useful Commands
+
+View running containers:
 
 ```bash
-docker compose logs -f viewer-1
+docker compose ps
+```
+
+View logs:
+
+```bash
+docker compose logs -f
+```
+
+Stop all viewers:
+
+```bash
+docker compose down
 ```
 
 ## Links

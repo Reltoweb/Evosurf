@@ -121,9 +121,9 @@ sudo systemctl enable --now evosurf-viewer-headless
 
 Avec cette configuration, le service lance `update-headless-linux.sh` avant chaque demarrage. Si le worker detecte une nouvelle version pendant qu'il tourne, il s'arrete, systemd le relance, puis `ExecStartPre` installe la nouvelle release.
 
-## Installation Docker avec auto-update
+## Installation Docker
 
-Le conteneur ne se modifie pas lui-meme. L'auto-update Docker passe par une nouvelle image GitHub Container Registry + Watchtower.
+Le conteneur Docker utilise l'image publique `evosurf/viewer:stable` depuis Docker Hub.
 
 Sur le VPS :
 
@@ -133,10 +133,21 @@ cd ~/evosurf-viewer
 curl -fsSL https://raw.githubusercontent.com/Reltoweb/Evosurf/main/viewer-headless/docker-compose.release.yml -o docker-compose.yml
 ```
 
-Edite `docker-compose.yml`, remplace `ACCESS_KEY` et `SESSION_ID`, puis lance :
+Creer ensuite un fichier `.env` avec la cle d'acces :
+
+```bash
+ACCESS_KEY=TA_CLE_ACCESS
+```
+
+Puis lance :
 
 ```bash
 docker compose up -d
 ```
 
-Watchtower verifiera l'image `evosurf/viewer:stable`, la telechargera quand elle change, puis redemarrera le conteneur.
+Pour mettre a jour plus tard, relance :
+
+```bash
+docker compose pull
+docker compose up -d
+```
