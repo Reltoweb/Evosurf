@@ -71,11 +71,11 @@ To run multiple viewers simultaneously, create a `docker-compose.yml` file:
 
 ```yaml
 services:
-  viewer-1:
+  viewer1:
     image: evosurf/viewer:stable
     environment:
       - ACCESS_KEY=${ACCESS_KEY}
-      - SESSION_ID=viewer-1
+      - SESSION_ID=viewer1
       - VIEWER_RUNTIME=docker
       - VIEWER_PLATFORM=linux
     restart: unless-stopped
@@ -88,11 +88,11 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  viewer-2:
+  viewer2:
     image: evosurf/viewer:stable
     environment:
       - ACCESS_KEY=${ACCESS_KEY}
-      - SESSION_ID=viewer-2
+      - SESSION_ID=viewer2
       - VIEWER_RUNTIME=docker
       - VIEWER_PLATFORM=linux
     restart: unless-stopped
@@ -105,11 +105,11 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  viewer-3:
+  viewer3:
     image: evosurf/viewer:stable
     environment:
       - ACCESS_KEY=${ACCESS_KEY}
-      - SESSION_ID=viewer-3
+      - SESSION_ID=viewer3
       - VIEWER_RUNTIME=docker
       - VIEWER_PLATFORM=linux
     restart: unless-stopped
