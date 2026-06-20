@@ -116,11 +116,24 @@ jobs:
           npm ci
           npm run build
 
-      - name: Upload Windows installer artifact
+      - name: Verify Windows update artifacts
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem electron/dist/EvoSurfViewer-win-*.exe
+          $manifest = Get-Item electron/dist/latest.yml
+          if (-not $installer -or -not $manifest) {
+            throw "The Windows installer or latest.yml update manifest is missing."
+          }
+
+      - name: Upload Windows update artifacts
         uses: actions/upload-artifact@v4
         with:
           name: evosurf-viewer-windows
-          path: electron/dist/EvoSurfViewer-win-*.exe
+          path: |
+            electron/dist/EvoSurfViewer-win-*.exe
+            electron/dist/latest.yml
+            electron/dist/*.blockmap
+          if-no-files-found: error
 
   release:
     needs:
