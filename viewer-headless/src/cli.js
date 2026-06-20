@@ -124,11 +124,44 @@ async function runWorker() {
     let browser = null;
     let activeAdapter = null;
     let visitCounter = 0;
+    let heartbeatTimer = null;
+    let heartbeatInFlight = false;
+
+    async function sendHeartbeat() {
+        if (stopping || heartbeatInFlight) return;
+        heartbeatInFlight = true;
+
+        try {
+            await api.heartbeat();
+            logger.debug('Heartbeat sent');
+        } catch (error) {
+            logger.debug('Heartbeat failed', {
+                status: error.status || 'network',
+                message: error.message
+            });
+        } finally {
+            heartbeatInFlight = false;
+        }
+    }
+
+    function startHeartbeat() {
+        const interval = Number(config.heartbeatIntervalMs);
+        if (heartbeatTimer || !Number.isFinite(interval) || interval <= 0) return;
+        sendHeartbeat();
+        heartbeatTimer = setInterval(sendHeartbeat, interval);
+    }
+
+    function stopHeartbeat() {
+        if (!heartbeatTimer) return;
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+    }
 
     async function shutdown(signal) {
         if (stopping) return;
         stopping = true;
         logger.warn(`Shutdown requested (${signal})`);
+        stopHeartbeat();
 
         if (activeAdapter) {
             await activeAdapter.stop().catch(() => {});
@@ -155,6 +188,7 @@ async function runWorker() {
     scheduleUpdateChecks(config, logger);
 
     browser = await launchBrowser(config);
+    startHeartbeat();
 
     while (!stopping) {
         let mission = null;

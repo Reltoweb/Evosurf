@@ -25,6 +25,7 @@ function readConfig() {
         appVersion: String(process.env.APP_VERSION || require('../package.json').version || 'headless-dev'),
         pollDelayMs: Number(process.env.POLL_DELAY_MS || 8000),
         loopDelayMs: Number(process.env.LOOP_DELAY_MS || 1000),
+        heartbeatIntervalMs: Number(process.env.HEARTBEAT_INTERVAL_MS || 60000),
         requestTimeoutMs: Number(process.env.REQUEST_TIMEOUT_MS || 15000),
         navigationTimeoutMs: Number(process.env.NAVIGATION_TIMEOUT_MS || 30000),
         headless: process.env.HEADLESS !== 'false',

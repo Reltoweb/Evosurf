@@ -60,6 +60,18 @@ class ApiClient {
         });
     }
 
+    heartbeat() {
+        return this.request('/surf/heartbeat', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: this.config.sessionId,
+                app_version: this.config.appVersion,
+                viewer_runtime: this.config.viewerRuntime,
+                viewer_platform: this.config.viewerPlatform
+            })
+        });
+    }
+
     validateVisit(viewToken) {
         return this.request('/surf/validate', {
             method: 'POST',
