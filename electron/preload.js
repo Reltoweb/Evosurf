@@ -23,6 +23,11 @@ contextBridge.exposeInMainWorld('electronViewer', {
         ipcRenderer.on('surf-interaction-log', (_event, payload) => callback(payload));
     },
 
+    onStartupError: (callback) => {
+        ipcRenderer.removeAllListeners('startup-error');
+        ipcRenderer.on('startup-error', (_event, message) => callback(message));
+    },
+
     getAppVersion: () => ipcRenderer.invoke('get-app-version')
 });
 

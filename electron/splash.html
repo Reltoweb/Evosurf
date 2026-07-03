@@ -91,6 +91,19 @@
             font-weight: 650;
         }
 
+        .error {
+            display: none;
+            margin-top: 18px;
+            padding: 10px 12px;
+            border: 1px solid rgba(220, 38, 38, 0.18);
+            border-radius: 8px;
+            background: rgba(254, 242, 242, 0.86);
+            color: #991b1b;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1.45;
+        }
+
         .bar {
             position: relative;
             height: 5px;
@@ -134,6 +147,18 @@
         <h1>EvoSurf Viewer</h1>
         <p>Chargement de la visionneuse</p>
         <div class="bar" aria-hidden="true"></div>
+        <div id="startup-error" class="error" role="alert"></div>
     </main>
+    <script>
+        const errorBox = document.getElementById('startup-error');
+
+        if (window.electronViewer && typeof window.electronViewer.onStartupError === 'function') {
+            window.electronViewer.onStartupError((message) => {
+                errorBox.textContent = 'Impossible de charger la visionneuse. Verifiez votre connexion puis relancez EvoSurf.';
+                errorBox.style.display = 'block';
+                if (message) console.error(message);
+            });
+        }
+    </script>
 </body>
 </html>

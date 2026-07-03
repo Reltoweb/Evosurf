@@ -319,13 +319,25 @@ function createWindow() {
 
     const clientUrl = getClientUrl();
     mainWindow.setTitle('EvoSurf Viewer');
-    mainWindow.loadFile(path.join(__dirname, 'splash.html'));
 
-    const loadClient = () => {
+    const loadClient = async () => {
         if (!mainWindow || mainWindow.isDestroyed()) return;
-        mainWindow.loadURL(clientUrl, { userAgent: CHROME_USER_AGENT });
+        try {
+            await mainWindow.loadURL(clientUrl, { userAgent: CHROME_USER_AGENT });
+        } catch (err) {
+            console.error('[Startup] Impossible de charger la visionneuse:', err?.message || err);
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('startup-error', err?.message || String(err));
+            }
+        }
     };
-    setTimeout(loadClient, 700);
+
+    mainWindow.loadFile(path.join(__dirname, 'splash.html'))
+        .then(() => setTimeout(loadClient, 700))
+        .catch((err) => {
+            console.error('[Startup] Impossible de charger le splash:', err?.message || err);
+            loadClient();
+        });
 
     mainWindow.webContents.on('page-title-updated', (event) => {
         event.preventDefault();
