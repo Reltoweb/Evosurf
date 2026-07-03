@@ -318,8 +318,19 @@ function createWindow() {
     });
 
     const clientUrl = getClientUrl();
-    mainWindow.setTitle('EvoSurf - ' + clientUrl);
-    mainWindow.loadURL(clientUrl, { userAgent: CHROME_USER_AGENT });
+    mainWindow.setTitle('EvoSurf Viewer');
+    mainWindow.loadFile(path.join(__dirname, 'splash.html'));
+
+    const loadClient = () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        mainWindow.loadURL(clientUrl, { userAgent: CHROME_USER_AGENT });
+    };
+    setTimeout(loadClient, 700);
+
+    mainWindow.webContents.on('page-title-updated', (event) => {
+        event.preventDefault();
+        mainWindow.setTitle('EvoSurf Viewer');
+    });
     mainWindow.removeMenu(); // Désactiver le menu natif (Fichier, Édition, etc.)
 
     // Les liens externes dans la mainWindow (ex: mentions légales) s'ouvrent
@@ -332,9 +343,11 @@ function createWindow() {
     setupSurfView();
 
     if (autoUpdater) {
-        checkUpdates().catch((err) => {
-            console.error('[AutoUpdate] Erreur non gérée:', err?.message || err);
-        });
+        setTimeout(() => {
+            checkUpdates().catch((err) => {
+                console.error('[AutoUpdate] Erreur non gérée:', err?.message || err);
+            });
+        }, 8000);
     }
 }
 

@@ -66,6 +66,7 @@ console.log(`Version ${pkg.version} synced to app/package.json`);
 // Copy Icon
 fs.copyFileSync('icon.ico', path.join(outputDir, 'icon.ico'));
 fs.copyFileSync('icon.png', path.join(outputDir, 'icon.png'));
+fs.copyFileSync('splash.html', path.join(outputDir, 'splash.html'));
 
 // Copy dependencies (node_modules) - This is tricky. 
 // Electron packager usually handles this. 

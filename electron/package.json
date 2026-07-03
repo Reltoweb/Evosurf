@@ -1,6 +1,6 @@
 {
     "name": "evosurf-client",
-    "version": "1.1.4",
+    "version": "1.1.5",
     "description": "Official EvoSurf Viewer",
     "main": "main.js",
     "scripts": {
@@ -32,7 +32,7 @@
             ],
             "signAndEditExecutable": false,
             "artifactName": "EvoSurfViewer-win-${version}.${ext}",
-            "executableName": "EvoSurfViewer-win-1.1.4"
+            "executableName": "EvoSurfViewer-win-1.1.5"
         },
         "afterPack": "scripts/after-pack.js",
         "nsis": {
@@ -57,6 +57,7 @@
             "secure_storage.js",
             "viewer-core/**",
             "default-client-url.js",
+            "splash.html",
             "config.json",
             "icon.ico",
             "icon.png",
