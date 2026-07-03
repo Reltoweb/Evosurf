@@ -81,18 +81,23 @@ viewer-headless/profiles/
 Dans le repo public, pousse un tag :
 
 ```bash
-git tag viewer-v1.1.3
-git push origin viewer-v1.1.3
+git tag viewer-v1.1.4
+git push origin viewer-v1.1.4
 ```
 
 Le workflow publie :
 
 ```text
-EvoSurfViewer-win-1.1.3.exe
+EvoSurfViewer-win-1.1.4.exe
+latest.yml
+EvoSurfViewer-win-1.1.4.exe.blockmap (si genere)
 evosurf-viewer-headless-linux.tar.gz
 evosurf/viewer:stable
 evosurf/viewer:latest
-evosurf/viewer:1.1.3
+evosurf/viewer:1.1.4
 ```
+
+`latest.yml` est obligatoire pour la mise a jour automatique Windows. Le workflow
+verifie sa presence et refuse de publier une release incomplete.
 
 Le VPS doit utiliser `EVOSURF_RELEASE_REPOSITORY=Reltoweb/Evosurf`.

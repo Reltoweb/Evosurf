@@ -312,6 +312,7 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
             nodeIntegration: false,
+            backgroundThrottling: false,
             userAgent: CHROME_USER_AGENT
         }
     });
@@ -493,6 +494,7 @@ function setupSurfView() {
             contextIsolation: true,
             sandbox: true,
             session: surfSess,
+            backgroundThrottling: false,
             userAgent: CHROME_USER_AGENT,
             // Pas de preload : la surf view n'expose aucune API à la page visitée.
         }
