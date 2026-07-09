@@ -16,6 +16,7 @@ class ApiClient {
     async request(path, options = {}) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), this.config.requestTimeoutMs);
+        const startedAt = Date.now();
 
         try {
             const response = await fetch(`${this.config.baseUrl}${path}`, {
@@ -42,6 +43,16 @@ class ApiClient {
             }
 
             return data || {};
+        } catch (error) {
+            if (error?.name === 'AbortError') {
+                const timeoutError = new Error(`request timeout after ${Date.now() - startedAt}ms`);
+                timeoutError.code = 'REQUEST_TIMEOUT';
+                timeoutError.path = path;
+                throw timeoutError;
+            }
+
+            error.path = error.path || path;
+            throw error;
         } finally {
             clearTimeout(timeout);
         }

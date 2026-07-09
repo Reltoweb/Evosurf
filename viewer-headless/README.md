@@ -16,6 +16,9 @@ Worker Linux/Docker base sur Playwright + Chromium headless. Il reutilise le mot
 - `EVOSURF_RELEASE_REPOSITORY`: depot GitHub public qui heberge les releases, par defaut `Reltoweb/Evosurf`.
 - `HEADLESS`: `true` par defaut. Mettre `false` pour debug avec fenetre.
 - `POLL_DELAY_MS`: attente quand aucune visite n'est disponible.
+- `POLL_JITTER_MS`: delai aleatoire ajoute aux retries pour eviter que plusieurs containers retentent ensemble, `5000` par defaut.
+- `MAX_POLL_DELAY_MS`: plafond du backoff apres erreurs reseau/timeouts, `60000` par defaut.
+- `REQUEST_TIMEOUT_MS`: timeout des appels API EvoSurf, `15000` par defaut.
 - `NAVIGATION_TIMEOUT_MS`: timeout de navigation Chromium.
 
 ## Test sans Docker

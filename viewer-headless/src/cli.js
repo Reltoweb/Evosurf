@@ -90,6 +90,36 @@ function formatPoints(value) {
     return points.toFixed(2).replace(/\.?0+$/, '');
 }
 
+function randomInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function retryDelayForMissionError(error, config, failureCount) {
+    const pollDelay = Number(config.pollDelayMs);
+    const baseDelay = Number.isFinite(pollDelay) && pollDelay > 0 ? pollDelay : 8000;
+
+    let retryDelay = error.status === 503 ? baseDelay : Math.max(baseDelay, 10000);
+
+    if (!error.status) {
+        const maxDelay = Number(config.maxPollDelayMs);
+        const cap = Number.isFinite(maxDelay) && maxDelay > 0 ? maxDelay : 60000;
+        const multiplier = Math.pow(2, Math.min(Math.max(failureCount - 1, 0), 4));
+        retryDelay = Math.min(cap, retryDelay * multiplier);
+    }
+
+    const jitter = Number(config.pollJitterMs);
+    if (Number.isFinite(jitter) && jitter > 0) {
+        retryDelay += randomInt(0, jitter);
+    }
+
+    return retryDelay;
+}
+
+function describeRequestError(error) {
+    if (error.code === 'REQUEST_TIMEOUT') return 'timeout';
+    return error.status || error.code || 'network';
+}
+
 function logStartup(logger, config) {
     logger.info('*'.repeat(80));
     logger.info(`Starting EvoSurf Viewer... [Version: ${config.appVersion}] - ${getBitnessLabel()}`);
@@ -124,6 +154,7 @@ async function runWorker() {
     let browser = null;
     let activeAdapter = null;
     let visitCounter = 0;
+    let missionFailureCount = 0;
     let heartbeatTimer = null;
     let heartbeatInFlight = false;
 
@@ -196,11 +227,14 @@ async function runWorker() {
         try {
             mission = await api.getNextVisit();
         } catch (error) {
-            const waitMs = error.status === 503 ? config.pollDelayMs : Math.max(config.pollDelayMs, 10000);
-            logger.warn(`Unable to get mission: ${error.status || 'network'} ${error.message}. Retry in ${Math.round(waitMs / 1000)} seconds`);
+            missionFailureCount += 1;
+            const waitMs = retryDelayForMissionError(error, config, missionFailureCount);
+            logger.warn(`Unable to get mission: ${describeRequestError(error)} ${error.message}. Retry in ${Math.round(waitMs / 1000)} seconds`);
             await delay(waitMs);
             continue;
         }
+
+        missionFailureCount = 0;
 
         if (!mission?.url || !mission?.view_token) {
             logger.debug('No visit available', {

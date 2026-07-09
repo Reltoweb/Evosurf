@@ -24,6 +24,8 @@ function readConfig() {
         sessionId: String(process.env.SESSION_ID || `headless_${Math.random().toString(36).slice(2)}_${Date.now()}`),
         appVersion: String(process.env.APP_VERSION || require('../package.json').version || 'headless-dev'),
         pollDelayMs: Number(process.env.POLL_DELAY_MS || 8000),
+        pollJitterMs: Number(process.env.POLL_JITTER_MS || 5000),
+        maxPollDelayMs: Number(process.env.MAX_POLL_DELAY_MS || 60000),
         loopDelayMs: Number(process.env.LOOP_DELAY_MS || 1000),
         heartbeatIntervalMs: Number(process.env.HEARTBEAT_INTERVAL_MS || 60000),
         requestTimeoutMs: Number(process.env.REQUEST_TIMEOUT_MS || 15000),
