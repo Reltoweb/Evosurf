@@ -70,18 +70,18 @@ Le repo prive du site `Reltoweb/autosurf` peut rester prive. Le repo public de r
 
 Publie une release GitHub avec :
 
-- `EvoSurfViewer-win-1.1.6.exe` pour Windows.
+- `EvoSurfViewer-win-1.1.7.exe` pour Windows.
 - `dist/evosurf-viewer-headless-linux.tar.gz` pour Linux direct.
 - l'image Docker `evosurf/viewer:stable` pour Docker.
 
 Le workflow fourni dans `viewer-headless/public-repo/.github/workflows/viewer-headless-release.yml` doit etre copie dans le repo public a l'emplacement `.github/workflows/viewer-headless-release.yml`. Il genere les assets automatiquement quand tu pousses un tag :
 
 ```bash
-git tag viewer-v1.1.6
-git push origin viewer-v1.1.6
+git tag viewer-v1.1.7
+git push origin viewer-v1.1.7
 ```
 
-Le tag doit rester au format `viewer-vX.Y.Z`, par exemple `viewer-v1.1.6`.
+Le tag doit rester au format `viewer-vX.Y.Z`, par exemple `viewer-v1.1.7`.
 
 ## Installation Linux sans Docker
 
@@ -105,7 +105,7 @@ Cree ensuite `/opt/evosurf-viewer-headless/.env` :
 EVOSURF_BASE_URL=https://www.evosurf.fr
 ACCESS_KEY=TA_CLE_ACCESS
 SESSION_ID=vps-1-linux-1
-APP_VERSION=1.1.6
+APP_VERSION=1.1.7
 VIEWER_RUNTIME=headless
 VIEWER_PLATFORM=linux
 UPDATE_CHECK_ENABLED=true

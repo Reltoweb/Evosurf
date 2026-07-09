@@ -82,20 +82,20 @@ viewer-headless/profiles/
 Dans le repo public, pousse un tag :
 
 ```bash
-git tag viewer-v1.1.6
-git push origin viewer-v1.1.6
+git tag viewer-v1.1.7
+git push origin viewer-v1.1.7
 ```
 
 Le workflow publie :
 
 ```text
-EvoSurfViewer-win-1.1.6.exe
+EvoSurfViewer-win-1.1.7.exe
 latest.yml
-EvoSurfViewer-win-1.1.6.exe.blockmap (si genere)
+EvoSurfViewer-win-1.1.7.exe.blockmap (si genere)
 evosurf-viewer-headless-linux.tar.gz
 evosurf/viewer:stable
 evosurf/viewer:latest
-evosurf/viewer:1.1.6
+evosurf/viewer:1.1.7
 ```
 
 `latest.yml` est obligatoire pour la mise a jour automatique Windows. Le workflow
