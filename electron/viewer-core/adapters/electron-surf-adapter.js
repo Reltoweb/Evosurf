@@ -1,6 +1,7 @@
 function createElectronSurfAdapter({
     getSurfView,
     setNavigationProfile,
+    setAllowedDomains,
     setViewport,
     waitForSettle
 }) {
@@ -20,6 +21,12 @@ function createElectronSurfAdapter({
         setNavigationProfile(deviceProfile, referrer) {
             if (setNavigationProfile) {
                 setNavigationProfile(deviceProfile, referrer);
+            }
+        },
+
+        setAllowedDomains(allowedDomains, targetUrl) {
+            if (setAllowedDomains) {
+                setAllowedDomains(allowedDomains, targetUrl);
             }
         },
 

@@ -18,6 +18,16 @@ contextBridge.exposeInMainWorld('electronViewer', {
         ipcRenderer.on('visit-success', () => callback());
     },
 
+    onVisitReady: (callback) => {
+        ipcRenderer.removeAllListeners('visit-ready');
+        ipcRenderer.on('visit-ready', () => callback());
+    },
+
+    onVisitFailed: (callback) => {
+        ipcRenderer.removeAllListeners('visit-failed');
+        ipcRenderer.on('visit-failed', (_event, payload) => callback(payload));
+    },
+
     onInteractionLog: (callback) => {
         ipcRenderer.removeAllListeners('surf-interaction-log');
         ipcRenderer.on('surf-interaction-log', (_event, payload) => callback(payload));

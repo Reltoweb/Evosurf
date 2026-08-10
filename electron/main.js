@@ -1,6 +1,7 @@
-const { app, BrowserWindow, BrowserView, ipcMain, session, dialog } = require('electron');
+const { app, BrowserWindow, BrowserView, ipcMain, session, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const SecureStorage = require('./secure_storage');
 const {
     CHROME_USER_AGENT,
@@ -9,6 +10,9 @@ const {
     SEC_CH_UA_MOBILE,
     SEC_CH_UA_PLATFORM,
     DEVICE_PROFILES,
+    createAllowedDomainSet,
+    inspectSurfNavigation,
+    createLogger,
     runVisit,
     createElectronSurfAdapter
 } = require('./viewer-core');
@@ -79,11 +83,76 @@ function getClientUrl() {
 
 let activeSurfNavigationProfile = DEVICE_PROFILES.desktop;
 let activeSurfReferrer = null;
+let activeSurfAllowedDomains = new Set();
+let surfVisitCounter = 0;
+const viewerLogger = createLogger('electron');
+let connectionReadyLogged = false;
 
-// Identifiant de partition pour la session isolée de la BrowserView surf.
-// 'persist:' → la session est persistée sur disque mais reste cloisonnée
-// du profil principal (defaultSession). Aucun cookie ni cache partagé.
-const SURF_SESSION_PARTITION = 'persist:surf-isolated';
+function logViewerStartup() {
+    const bitness = process.arch === 'x64' ? '64-bit' : process.arch;
+    const cpu = os.cpus()[0]?.model || 'Unknown CPU';
+
+    viewerLogger.info('*'.repeat(80));
+    viewerLogger.info(`Starting EvoSurf Viewer... [Version: ${app.getVersion()}] - ${bitness}`);
+    viewerLogger.info('Mode: Visible');
+    viewerLogger.info(`AutoUpdate is ${app.isPackaged && autoUpdater ? 'activated' : 'disabled (development mode)'}`);
+    viewerLogger.info('Connecting instance...');
+    viewerLogger.info('Get System Info');
+    viewerLogger.info(`[CPU]: ${cpu}`);
+    viewerLogger.info(`[Cores]: ${os.cpus().length || 1}`);
+    viewerLogger.info(`[Memory]: ${Math.round(os.totalmem() / 1024 / 1024)}`);
+    viewerLogger.info(`[OS]: ${os.platform()} ${os.arch()}`);
+    viewerLogger.info(`[OS Version]: ${os.type()} ${os.release()}`);
+    viewerLogger.info(`Version: ${app.getVersion()}`);
+    viewerLogger.info('Get configuration...');
+    viewerLogger.info('Checking connection...');
+}
+
+// Partition temporaire et isolée de la BrowserView surf. Elle n'est jamais
+// réutilisée au prochain lancement : cookies et stockage des sites disparaissent.
+const SURF_SESSION_PARTITION = 'surf-isolated';
+const LEGACY_SURF_SESSION_PARTITION = 'persist:surf-isolated';
+
+function setActiveSurfAllowedDomains(allowedDomains = [], targetUrl = null) {
+    activeSurfAllowedDomains = createAllowedDomainSet(allowedDomains, targetUrl);
+}
+
+function sanitizeLogText(value, fallback = '', maxLength = 100) {
+    const cleaned = String(value ?? '').replace(/[\r\n\t]+/g, ' ').trim();
+    return (cleaned || fallback).slice(0, maxLength);
+}
+
+function hostnameForLog(url, fallback = 'site inconnu') {
+    try {
+        return sanitizeLogText(new URL(url).hostname, fallback);
+    } catch (error) {
+        return fallback;
+    }
+}
+
+function blockUnsafeSurfNavigation(event, detailsOrUrl, requireAllowedDomain = true) {
+    const details = typeof detailsOrUrl === 'string' ? { url: detailsOrUrl } : (detailsOrUrl || {});
+    const result = inspectSurfNavigation(details.url || '', activeSurfAllowedDomains, requireAllowedDomain);
+    if (result.allowed) return;
+
+    event.preventDefault();
+    const domain = hostnameForLog(details.url || '');
+    console.warn(`[Surf] Navigation bloquée : ${domain} — ${result.reason}`);
+    emitSurfInteractionLog({
+        type: 'security-block',
+        action: 'navigation',
+        reason: result.reason,
+        domain,
+    });
+}
+
+async function clearLegacySurfStorage() {
+    const legacySession = session.fromPartition(LEGACY_SURF_SESSION_PARTITION);
+    await legacySession.clearStorageData({
+        storages: ['cookies', 'filesystem', 'indexdb', 'localstorage', 'serviceworkers', 'cachestorage'],
+    });
+    await legacySession.clearCache();
+}
 
 /**
  * Configure la session principale (defaultSession) pour masquer la signature
@@ -221,6 +290,7 @@ function createSurfAdapter() {
             activeSurfNavigationProfile = deviceProfile;
             activeSurfReferrer = referrer;
         },
+        setAllowedDomains: setActiveSurfAllowedDomains,
         setViewport: applySurfViewport,
         waitForSettle: waitForSurfViewToSettle
     });
@@ -231,6 +301,34 @@ function setupSurfSession() {
 
     // ----- Stealth : User-Agent + Referer + Client Hints sur la session surf -----
     surfSess.setUserAgent(CHROME_USER_AGENT);
+
+    // Les sites autosurf sont non fiables et n'ont besoin d'aucune permission native.
+    surfSess.setPermissionCheckHandler(() => false);
+    surfSess.setPermissionRequestHandler((webContents, permission, callback, details) => {
+        // storage-access est demandé couramment par Chromium pour les cookies
+        // tiers. Il reste refusé, mais sans polluer les logs à chaque visite.
+        if (permission !== 'storage-access') {
+            console.warn(`[Surf] Permission sensible bloquée : ${permission}`);
+            emitSurfInteractionLog({
+                type: 'security-block',
+                action: 'permission',
+                permission,
+            });
+        }
+        callback(false);
+    });
+    surfSess.setDevicePermissionHandler(() => false);
+
+    surfSess.on('will-download', (event, item, webContents) => {
+        event.preventDefault();
+        const domain = hostnameForLog(item?.getURL?.() || webContents?.getURL?.() || '');
+        console.warn(`[Surf] Téléchargement bloqué : ${domain}`);
+        emitSurfInteractionLog({
+            type: 'security-block',
+            action: 'download',
+            domain,
+        });
+    });
 
     surfSess.webRequest.onBeforeSendHeaders((details, callback) => {
         const headers = { ...details.requestHeaders };
@@ -289,14 +387,6 @@ function setupSurfSession() {
         callback({ cancel: false, responseHeaders });
     });
 
-    // ----- SÉCURITÉ : Blocage silencieux de tous les téléchargements -----
-    // Un site malveillant pourrait tenter de forcer un téléchargement de fichier
-    // (.exe, .bat, .zip…). On annule systématiquement sans interaction utilisateur.
-    surfSess.on('will-download', (event, item) => {
-        console.warn(`[Surf] Téléchargement bloqué : ${item.getURL()} (${item.getFilename()})`);
-        item.cancel();
-    });
-
     return surfSess;
 }
 
@@ -325,6 +415,11 @@ function createWindow() {
         try {
             await mainWindow.loadURL(clientUrl, { userAgent: CHROME_USER_AGENT });
         } catch (err) {
+            // Une redirection interne (/surf/client -> /surf/client/auth) annule
+            // la navigation précédente sans constituer une panne de démarrage.
+            if (err?.code === 'ERR_ABORTED' || String(err?.message || '').includes('ERR_ABORTED')) {
+                return;
+            }
             console.error('[Startup] Impossible de charger la visionneuse:', err?.message || err);
             if (mainWindow && !mainWindow.isDestroyed()) {
                 mainWindow.webContents.send('startup-error', err?.message || String(err));
@@ -339,6 +434,15 @@ function createWindow() {
             loadClient();
         });
 
+    mainWindow.webContents.on('did-finish-load', () => {
+        const loadedUrl = mainWindow?.webContents?.getURL?.() || '';
+        if (!connectionReadyLogged && /^https?:\/\//i.test(loadedUrl)) {
+            connectionReadyLogged = true;
+            viewerLogger.info('Connection: Ready');
+            viewerLogger.info('Surf is about to start');
+        }
+    });
+
     mainWindow.webContents.on('page-title-updated', (event) => {
         event.preventDefault();
         mainWindow.setTitle('EvoSurf Viewer');
@@ -348,7 +452,14 @@ function createWindow() {
     // Les liens externes dans la mainWindow (ex: mentions légales) s'ouvrent
     // dans le navigateur système et ne sont jamais chargés dans Electron.
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-        require('electron').shell.openExternal(url);
+        try {
+            const parsed = new URL(url);
+            if (['http:', 'https:'].includes(parsed.protocol)) {
+                shell.openExternal(parsed.toString());
+            }
+        } catch (error) {
+            console.warn(`[Main] Lien externe invalide bloqué : ${url}`);
+        }
         return { action: 'deny' };
     });
 
@@ -364,14 +475,19 @@ function createWindow() {
 }
 
 function checkUpdates() {
-    if (!autoUpdater) {
-        console.warn('[AutoUpdate] autoUpdater is not available - skipping update check');
-        return;
-    }
-
     console.log('[AutoUpdate] ===== INITIALIZING UPDATE CHECK =====');
     console.log('[AutoUpdate] App version:', app.getVersion());
     console.log('[AutoUpdate] App name:', app.getName());
+
+    if (!app.isPackaged) {
+        console.log('[AutoUpdate] Development mode: update check skipped.');
+        return Promise.resolve(null);
+    }
+
+    if (!autoUpdater) {
+        console.warn('[AutoUpdate] autoUpdater is not available - skipping update check');
+        return Promise.resolve(null);
+    }
 
     // Cibler explicitement le dépôt public des releases (Reltoweb/Evosurf)
     autoUpdater.setFeedURL({
@@ -518,6 +634,9 @@ function setupSurfView() {
             nodeIntegration: false,
             contextIsolation: true,
             sandbox: true,
+            disableDialogs: true,
+            navigateOnDragDrop: false,
+            autoplayPolicy: 'document-user-activation-required',
             session: surfSess,
             backgroundThrottling: false,
             userAgent: CHROME_USER_AGENT,
@@ -540,8 +659,29 @@ function setupSurfView() {
     // fenêtre : tout est bloqué. Aucune fenêtre externe n'est créée.
     // -------------------------------------------------------------------------
     surfView.webContents.setWindowOpenHandler(({ url }) => {
-        console.warn(`[Surf] Pop-up bloquée : ${url}`);
+        const domain = hostnameForLog(url);
+        console.warn(`[Surf] Pop-up bloquée : ${domain}`);
+        emitSurfInteractionLog({
+            type: 'security-block',
+            action: 'popup',
+            domain,
+        });
         return { action: 'deny' };
+    });
+
+    surfView.webContents.on('will-navigate', (event, detailsOrUrl) => {
+        blockUnsafeSurfNavigation(event, detailsOrUrl, true);
+    });
+
+    surfView.webContents.on('will-redirect', (event, detailsOrUrl) => {
+        const details = typeof detailsOrUrl === 'string'
+            ? { url: detailsOrUrl, isMainFrame: true }
+            : (detailsOrUrl || {});
+        blockUnsafeSurfNavigation(event, details, details.isMainFrame !== false);
+    });
+
+    surfView.webContents.on('will-frame-navigate', (event, details) => {
+        blockUnsafeSurfNavigation(event, details, details?.isMainFrame === true);
     });
 
     // -------------------------------------------------------------------------
@@ -559,7 +699,7 @@ function setupSurfView() {
     // émettre un IPC vers mainWindow pour signaler l'échec TLS.
     // -------------------------------------------------------------------------
     surfView.webContents.on('certificate-error', (event, url, error, certificate, callback) => {
-        console.warn(`[Surf] Erreur TLS bloquée pour ${url} — ${error}`);
+        console.warn(`[Surf] Erreur TLS bloquée : ${hostnameForLog(url)} — ${error}`);
         // callback(false) → Chromium bloque la navigation et affiche une erreur.
         // NE PAS appeler callback(true) ici, ce qui reviendrait à ignorer l'erreur.
         callback(false);
@@ -568,7 +708,7 @@ function setupSurfView() {
     // Remonter les erreurs de chargement pour debug (timeout, DNS, etc.)
     surfView.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
         if (errorCode !== -3) { // -3 = ERR_ABORTED (navigation annulée volontairement, normal)
-            console.warn(`[Surf] Échec de chargement : ${validatedURL} — ${errorDescription} (${errorCode})`);
+            viewerLogger.debug(`Load failed: ${hostnameForLog(validatedURL)} — ${errorDescription} (${errorCode})`);
         }
     });
 }
@@ -578,16 +718,33 @@ function setupSurfView() {
 // Validation stricte du protocole avant tout loadURL.
 // ---------------------------------------------------------------------------
 ipcMain.on('start-visit', async (event, payload) => {
+    const visitSerial = ++surfVisitSerial;
     try {
-        const visitSerial = ++surfVisitSerial;
         await runVisit({
             payload,
             adapter: createSurfAdapter(),
             emitLog: emitSurfInteractionLog,
             isCurrent: () => visitSerial === surfVisitSerial
         });
+        if (visitSerial === surfVisitSerial && mainWindow && !mainWindow.isDestroyed()) {
+            const metadata = payload?.metadata || {};
+            const duration = Math.max(0, Number(metadata.duration) || 0);
+            const pointsValue = Math.max(0, Number(metadata.creditsExpected) || 0);
+            const points = pointsValue.toFixed(2).replace(/\.?0+$/, '');
+            const url = sanitizeLogText(payload?.target?.url || payload?.url, 'URL inconnue', 2048);
+
+            surfVisitCounter++;
+            viewerLogger.visit(surfVisitCounter, points, duration, url);
+            mainWindow.webContents.send('visit-ready');
+        }
     } catch (e) {
-        console.error("[Electron] Load error:", e);
+        viewerLogger.error(`Mission failed: ${e?.message || e || 'Unknown error'}`);
+        if (visitSerial === surfVisitSerial && mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('visit-failed', {
+                message: e?.message || String(e),
+                url: payload?.target?.url || payload?.url || null,
+            });
+        }
     }
 });
 
@@ -596,6 +753,7 @@ ipcMain.on('stop-visit', () => {
         surfVisitSerial++;
         activeSurfNavigationProfile = DEVICE_PROFILES.desktop;
         activeSurfReferrer = null;
+        activeSurfAllowedDomains = new Set();
         if (surfView && !surfView.webContents.isDestroyed()) {
             createSurfAdapter().stop();
         }
@@ -624,7 +782,11 @@ if (!gotTheLock) {
     });
 
     app.whenReady().then(() => {
+        logViewerStartup();
         setupSessionStealth();
+        clearLegacySurfStorage().catch((error) => {
+            console.warn('[Surf] Nettoyage de l’ancienne session isolée impossible :', error?.message || error);
+        });
         createWindow();
     });
 }

@@ -26,6 +26,7 @@ electron/preload.js
 electron/secure_storage.js
 electron/splash.html
 electron/scripts/
+electron/tests/
 electron/viewer-core/
 
 viewer-headless/Dockerfile
@@ -82,20 +83,20 @@ viewer-headless/profiles/
 Dans le repo public, pousse un tag :
 
 ```bash
-git tag viewer-v1.1.7
-git push origin viewer-v1.1.7
+git tag viewer-v1.1.8
+git push origin viewer-v1.1.8
 ```
 
 Le workflow publie :
 
 ```text
-EvoSurfViewer-win-1.1.7.exe
+EvoSurfViewer-win-1.1.8.exe
 latest.yml
-EvoSurfViewer-win-1.1.7.exe.blockmap (si genere)
+EvoSurfViewer-win-1.1.8.exe.blockmap (si genere)
 evosurf-viewer-headless-linux.tar.gz
 evosurf/viewer:stable
 evosurf/viewer:latest
-evosurf/viewer:1.1.7
+evosurf/viewer:1.1.8
 ```
 
 `latest.yml` est obligatoire pour la mise a jour automatique Windows. Le workflow

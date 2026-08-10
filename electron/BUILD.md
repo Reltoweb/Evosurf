@@ -46,7 +46,8 @@ npm run build
 
 Après le build :
 
-- **`electron/dist/win-unpacked/`** contient **EvoSurfViewer-win-{version}.exe** (ex. `EvoSurfViewer-win-1.1.3.exe`) et les fichiers nécessaires (DLL, ffmpeg, etc.). Lance cet exe pour ouvrir le client.
+- **`electron/dist/win-unpacked/`** contient **EvoSurfViewer.exe** et les fichiers nécessaires (DLL, ffmpeg, etc.). L'installateur distribué reste versionné sous la forme **EvoSurfViewer-win-{version}.exe**.
+- L'installation Windows utilise le dossier stable lié au produit **EvoSurf** ; l'assistant ne propose plus de sélectionner un dossier versionné.
 
 **Important – ffmpeg.dll / déplacer l’exe** : le .exe a besoin des DLL (dont **ffmpeg.dll**) qui sont dans le même dossier.  
 - **Ne copie pas uniquement** l’exe (par ex. sur le Bureau) : tu aurais « ffmpeg.dll introuvable ».  
@@ -66,7 +67,7 @@ En **runtime**, l’exe peut encore être surchargé par un **`config.json`** à
 ## Si l’app affiche « 404 Not Found »
 
 - **Laravel doit tourner** et être accessible à l’URL configurée (celle du `.env` au build, ou celle dans `config.json`).
-- Si tu utilises une autre URL (ex. `http://evosurf.test/surf/client`), crée un fichier **`config.json`** **à côté de l’exe** (dans le même dossier que EvoSurfViewer-win-*.exe) avec :
+- Si tu utilises une autre URL (ex. `http://evosurf.test/surf/client`), crée un fichier **`config.json`** **à côté de `EvoSurfViewer.exe`** avec :
 
 ```json
 {

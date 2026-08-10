@@ -62,10 +62,6 @@ if (fs.existsSync(iconPng)) {
     console.log('icon.png copié dans build/');
 }
 
-// Nom de l'exécutable Windows : EvoSurfViewer-win-{version}
-const version = electronPkg.version || '1.1.3';
-if (!electronPkg.build) electronPkg.build = {};
-if (!electronPkg.build.win) electronPkg.build.win = {};
-electronPkg.build.win.executableName = `EvoSurfViewer-win-${version}`;
-fs.writeFileSync(electronPkgPath, JSON.stringify(electronPkg, null, 4), 'utf8');
-console.log('executableName Windows = EvoSurfViewer-win-' + version);
+// Le nom de l'exécutable installé doit rester stable entre les versions.
+// Seul artifactName, configuré dans package.json, contient le numéro de version.
+console.log('executableName Windows = EvoSurfViewer');

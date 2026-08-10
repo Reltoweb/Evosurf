@@ -114,6 +114,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm ci
+          npm run test:security
           npm run build
 
       - name: Verify Windows update artifacts

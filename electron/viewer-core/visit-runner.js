@@ -28,6 +28,10 @@ async function runVisit({ payload, adapter, emitLog, isCurrent = () => true }) {
         await adapter.setNavigationProfile(deviceProfile, referrer);
     }
 
+    if (adapter.setAllowedDomains) {
+        await adapter.setAllowedDomains(visitConfig.target.allowedDomains || [], urlObj.toString());
+    }
+
     if (adapter.setViewport) {
         await adapter.setViewport(deviceProfile);
     }
