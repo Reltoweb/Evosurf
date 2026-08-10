@@ -51,7 +51,14 @@ ipcMain.handle('get-app-version', () => app.getVersion());
 let mainWindow;
 let surfView;
 let surfVisitSerial = 0;
+let blockedMainFrameNavigationSerial = 0;
 const debugInteractions = process.env.DEBUG_INTERACTIONS === 'true' || process.env.EVOSURF_DEBUG_INTERACTIONS === 'true';
+
+// Les erreurs réseau natives de Chromium sont conservées en mode diagnostic,
+// mais ne polluent pas le journal normal destiné aux visites.
+if (!debugInteractions) {
+    app.commandLine.appendSwitch('log-level', '3');
+}
 
 let DEFAULT_CLIENT_URL;
 try {
@@ -85,7 +92,7 @@ let activeSurfNavigationProfile = DEVICE_PROFILES.desktop;
 let activeSurfReferrer = null;
 let activeSurfAllowedDomains = new Set();
 let surfVisitCounter = 0;
-const viewerLogger = createLogger('electron');
+const viewerLogger = createLogger('electron', { debug: debugInteractions, debugInteractions });
 let connectionReadyLogged = false;
 
 function logViewerStartup() {
@@ -106,6 +113,16 @@ function logViewerStartup() {
     viewerLogger.info(`Version: ${app.getVersion()}`);
     viewerLogger.info('Get configuration...');
     viewerLogger.info('Checking connection...');
+}
+
+// Lorsqu'un lanceur fournit une clé par variable d'environnement, la mémoriser
+// dans le stockage chiffré du profil courant avant de charger la connexion.
+// La clé n'est jamais placée dans les arguments de la ligne de commande.
+function saveLaunchAccessKey() {
+    const accessKey = String(process.env.ACCESS_KEY || process.env.EVOSURF_ACCESS_KEY || '').trim();
+    if (!accessKey || accessKey.length < 8 || !storage) return;
+
+    storage.save('viewer_access_key', accessKey);
 }
 
 // Partition temporaire et isolée de la BrowserView surf. Elle n'est jamais
@@ -137,7 +154,9 @@ function blockUnsafeSurfNavigation(event, detailsOrUrl, requireAllowedDomain = t
 
     event.preventDefault();
     const domain = hostnameForLog(details.url || '');
-    console.warn(`[Surf] Navigation bloquée : ${domain} — ${result.reason}`);
+    if (requireAllowedDomain && result.reason === 'domain-not-allowed') {
+        blockedMainFrameNavigationSerial = surfVisitSerial;
+    }
     emitSurfInteractionLog({
         type: 'security-block',
         action: 'navigation',
@@ -283,7 +302,7 @@ function emitSurfInteractionLog(payload) {
     }
 }
 
-function createSurfAdapter() {
+function createSurfAdapter(visitSerial = 0) {
     return createElectronSurfAdapter({
         getSurfView: () => surfView,
         setNavigationProfile: (deviceProfile, referrer) => {
@@ -292,7 +311,18 @@ function createSurfAdapter() {
         },
         setAllowedDomains: setActiveSurfAllowedDomains,
         setViewport: applySurfViewport,
-        waitForSettle: waitForSurfViewToSettle
+        waitForSettle: waitForSurfViewToSettle,
+        shouldRecoverBlockedNavigation: (error) => {
+            const isBlockedRedirect = blockedMainFrameNavigationSerial === visitSerial;
+            const isExpectedLoadFailure = error?.code === 'ERR_FAILED'
+                || error?.errno === -2
+                || String(error?.message || '').includes('ERR_FAILED (-2)');
+
+            if (!isBlockedRedirect || !isExpectedLoadFailure) return false;
+
+            blockedMainFrameNavigationSerial = 0;
+            return true;
+        }
     });
 }
 
@@ -308,7 +338,6 @@ function setupSurfSession() {
         // storage-access est demandé couramment par Chromium pour les cookies
         // tiers. Il reste refusé, mais sans polluer les logs à chaque visite.
         if (permission !== 'storage-access') {
-            console.warn(`[Surf] Permission sensible bloquée : ${permission}`);
             emitSurfInteractionLog({
                 type: 'security-block',
                 action: 'permission',
@@ -322,7 +351,6 @@ function setupSurfSession() {
     surfSess.on('will-download', (event, item, webContents) => {
         event.preventDefault();
         const domain = hostnameForLog(item?.getURL?.() || webContents?.getURL?.() || '');
-        console.warn(`[Surf] Téléchargement bloqué : ${domain}`);
         emitSurfInteractionLog({
             type: 'security-block',
             action: 'download',
@@ -660,7 +688,6 @@ function setupSurfView() {
     // -------------------------------------------------------------------------
     surfView.webContents.setWindowOpenHandler(({ url }) => {
         const domain = hostnameForLog(url);
-        console.warn(`[Surf] Pop-up bloquée : ${domain}`);
         emitSurfInteractionLog({
             type: 'security-block',
             action: 'popup',
@@ -699,7 +726,12 @@ function setupSurfView() {
     // émettre un IPC vers mainWindow pour signaler l'échec TLS.
     // -------------------------------------------------------------------------
     surfView.webContents.on('certificate-error', (event, url, error, certificate, callback) => {
-        console.warn(`[Surf] Erreur TLS bloquée : ${hostnameForLog(url)} — ${error}`);
+        emitSurfInteractionLog({
+            type: 'security-block',
+            action: 'certificate',
+            error,
+            domain: hostnameForLog(url),
+        });
         // callback(false) → Chromium bloque la navigation et affiche une erreur.
         // NE PAS appeler callback(true) ici, ce qui reviendrait à ignorer l'erreur.
         callback(false);
@@ -719,10 +751,11 @@ function setupSurfView() {
 // ---------------------------------------------------------------------------
 ipcMain.on('start-visit', async (event, payload) => {
     const visitSerial = ++surfVisitSerial;
+    blockedMainFrameNavigationSerial = 0;
     try {
         await runVisit({
             payload,
-            adapter: createSurfAdapter(),
+            adapter: createSurfAdapter(visitSerial),
             emitLog: emitSurfInteractionLog,
             isCurrent: () => visitSerial === surfVisitSerial
         });
@@ -738,7 +771,7 @@ ipcMain.on('start-visit', async (event, payload) => {
             mainWindow.webContents.send('visit-ready');
         }
     } catch (e) {
-        viewerLogger.error(`Mission failed: ${e?.message || e || 'Unknown error'}`);
+        viewerLogger.debug(`Mission failed: ${e?.message || e || 'Unknown error'}`);
         if (visitSerial === surfVisitSerial && mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('visit-failed', {
                 message: e?.message || String(e),
@@ -751,6 +784,7 @@ ipcMain.on('start-visit', async (event, payload) => {
 ipcMain.on('stop-visit', () => {
     try {
         surfVisitSerial++;
+        blockedMainFrameNavigationSerial = 0;
         activeSurfNavigationProfile = DEVICE_PROFILES.desktop;
         activeSurfReferrer = null;
         activeSurfAllowedDomains = new Set();
@@ -783,6 +817,7 @@ if (!gotTheLock) {
 
     app.whenReady().then(() => {
         logViewerStartup();
+        saveLaunchAccessKey();
         setupSessionStealth();
         clearLegacySurfStorage().catch((error) => {
             console.warn('[Surf] Nettoyage de l’ancienne session isolée impossible :', error?.message || error);

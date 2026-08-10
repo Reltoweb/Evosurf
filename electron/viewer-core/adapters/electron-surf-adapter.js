@@ -3,7 +3,8 @@ function createElectronSurfAdapter({
     setNavigationProfile,
     setAllowedDomains,
     setViewport,
-    waitForSettle
+    waitForSettle,
+    shouldRecoverBlockedNavigation
 }) {
     const getWebContents = () => {
         const surfView = getSurfView();
@@ -40,8 +41,22 @@ function createElectronSurfAdapter({
             getWebContents().setUserAgent(userAgent);
         },
 
-        loadURL(url, options) {
-            return getWebContents().loadURL(url, options);
+        async loadURL(url, options) {
+            const webContents = getWebContents();
+
+            try {
+                return await webContents.loadURL(url, options);
+            } catch (error) {
+                if (!shouldRecoverBlockedNavigation || !shouldRecoverBlockedNavigation(error)) {
+                    throw error;
+                }
+
+                // Une redirection principale vers un domaine externe a été
+                // bloquée. Afficher une vue neutre, puis laisser la visite et
+                // son compteur continuer normalement.
+                await webContents.loadURL('about:blank').catch(() => {});
+                return null;
+            }
         },
 
         evaluate(script) {
