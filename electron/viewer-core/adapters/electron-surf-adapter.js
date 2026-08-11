@@ -4,7 +4,7 @@ function createElectronSurfAdapter({
     setAllowedDomains,
     setViewport,
     waitForSettle,
-    shouldRecoverBlockedNavigation
+    loadTimeoutMs = 30000
 }) {
     const getWebContents = () => {
         const surfView = getSurfView();
@@ -43,19 +43,23 @@ function createElectronSurfAdapter({
 
         async loadURL(url, options) {
             const webContents = getWebContents();
+            const timeout = Math.max(10, Number(loadTimeoutMs) || 30000);
+            let timeoutId = null;
 
             try {
-                return await webContents.loadURL(url, options);
-            } catch (error) {
-                if (!shouldRecoverBlockedNavigation || !shouldRecoverBlockedNavigation(error)) {
-                    throw error;
-                }
-
-                // Une redirection principale vers un domaine externe a été
-                // bloquée. Afficher une vue neutre, puis laisser la visite et
-                // son compteur continuer normalement.
-                await webContents.loadURL('about:blank').catch(() => {});
-                return null;
+                return await Promise.race([
+                    webContents.loadURL(url, options),
+                    new Promise((resolve, reject) => {
+                        timeoutId = setTimeout(() => {
+                            try { webContents.stop(); } catch (error) { /* ignore */ }
+                            const timeoutError = new Error(`Délai de chargement dépassé après ${timeout} ms`);
+                            timeoutError.code = 'EVOSURF_LOAD_TIMEOUT';
+                            reject(timeoutError);
+                        }, timeout);
+                    })
+                ]);
+            } finally {
+                if (timeoutId) clearTimeout(timeoutId);
             }
         },
 

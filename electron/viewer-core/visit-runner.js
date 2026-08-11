@@ -4,7 +4,7 @@ const { resolveReferrer } = require('./referrers');
 const { clampNumber, delay } = require('./timing');
 const { runPostLoadInteraction } = require('./interaction-runner');
 
-async function runVisit({ payload, adapter, emitLog, isCurrent = () => true }) {
+async function runVisit({ payload, adapter, emitLog, isCurrent = () => true, onPageReady = () => {} }) {
     const visitConfig = normalizeVisitConfig(payload);
     const url = visitConfig.target.url;
 
@@ -57,13 +57,26 @@ async function runVisit({ payload, adapter, emitLog, isCurrent = () => true }) {
     }
     if (!isCurrent()) return;
 
-    await runPostLoadInteraction({
-        visitConfig,
-        targetUrl: urlObj.toString(),
-        adapter,
-        emitLog,
-        viewport: deviceProfile.viewport || null
-    });
+    await onPageReady({ visitConfig, url: urlObj.toString() });
+    if (!isCurrent()) return;
+
+    try {
+        await runPostLoadInteraction({
+            visitConfig,
+            targetUrl: urlObj.toString(),
+            adapter,
+            emitLog,
+            viewport: deviceProfile.viewport || null
+        });
+    } catch (error) {
+        emitLog({
+            type: 'result',
+            action: 'interaction',
+            completed: false,
+            reason: 'interaction-failed',
+            error: error?.message || String(error)
+        });
+    }
 }
 
 module.exports = {

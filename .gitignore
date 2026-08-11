@@ -12,3 +12,112 @@ viewer-headless/.env.*
 viewer-headless/dist/
 viewer-headless/*.tgz
 viewer-headless/*.tar.gz
+/vendor/
+node_modules/
+npm-debug.log
+yarn-error.log
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.sublime-*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config utilisateur (à personnaliser, ne pas versionner)
+/electron/config.json
+.codex-github-keys/
+/.agents/
+
+# Laravel 4 specific
+bootstrap/compiled.php
+bootstrap/cache/*.php
+app/storage/
+
+# Laravel 5 & Lumen specific
+public/storage
+public/hot
+
+# Laravel 5 & Lumen specific with changed public path
+public_html/storage
+public_html/hot
+
+storage/*.key
+.env
+.env.local
+.env.*.local
+Homestead.yaml
+Homestead.json
+/.vagrant
+.phpunit.result.cache
+
+# public/build versionné pour déploiement sans Node (Hostinger)
+/storage/pail
+.env.backup
+.env.production
+reset-admin-password.php
+.phpactor.json
+auth.json
+composer-auth.json
+
+# Certificats / clés privées
+*.pem
+
+# Dumps / archives locales
+/*.sql
+/*.zip
+/*.7z
+/*.rar
+
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/testing/*
+/storage/framework/views/*
+/storage/framework/PsySH/
+/storage/logs/*
+/storage/app/network-intelligence/
+
+# Données runtime : elles doivent rester dans le stockage persistant, jamais dans Git.
+/storage/app/*.sql
+/storage/app/public/blog-covers/*
+/storage/app/public/blog-content/*
+/database/content/blog/*.json
+/storage/app/public/screenshots/*
+
+/backup/
+/backups/
+
+# Electron build
+/electron/dist/
+/electron/dist-fixed/
+/electron/dist-release/
+/electron/app/
+/electron/release-audit-*/
+/electron/build/
+/electron/default-client-url.js
+
+# Headless viewer local runtime/build artifacts
+/viewer-headless/node_modules/
+/viewer-headless/profiles/
+/viewer-headless/.env
+/viewer-headless/.env.*
+/viewer-headless/dist/
+/viewer-headless/*.tgz
+/viewer-headless/*.tar.gz
+/viewer-headless/docker-compose.override.yml
+/viewer-headless/playwright-report/
+/viewer-headless/test-results/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/screenshots/
+/storage/app/public/screenshots/
+
+# Playwright
+/playwright/.auth/

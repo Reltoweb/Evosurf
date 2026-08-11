@@ -9,6 +9,15 @@ test('allows the configured domain and its subdomains', () => {
     assert.equal(inspectSurfNavigation('https://shop.example.com/next', allowed).allowed, true);
 });
 
+test('allows the canonical www and bare-domain redirect in both directions', () => {
+    const bareAllowed = createAllowedDomainSet(['example.com']);
+    const wwwAllowed = createAllowedDomainSet(['www.example.com']);
+
+    assert.equal(inspectSurfNavigation('https://www.example.com/page', bareAllowed).allowed, true);
+    assert.equal(inspectSurfNavigation('https://example.com/page', wwwAllowed).allowed, true);
+    assert.equal(inspectSurfNavigation('https://other.example.com/page', wwwAllowed).allowed, false);
+});
+
 test('blocks unrelated domains for main-frame navigation', () => {
     const allowed = createAllowedDomainSet(['example.com']);
     const result = inspectSurfNavigation('https://malicious.example/download', allowed);

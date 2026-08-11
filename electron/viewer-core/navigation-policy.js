@@ -35,8 +35,11 @@ function inspectSurfNavigation(url, allowedDomains, requireAllowedDomain = true)
     if (!requireAllowedDomain) return { allowed: true, reason: null };
 
     const hostname = parsed.hostname.toLowerCase();
+    const canonicalHostname = hostname.replace(/^www\./, '');
     const allowed = [...allowedDomains].some(domain => (
-        hostname === domain || hostname.endsWith(`.${domain}`)
+        hostname === domain
+        || hostname.endsWith(`.${domain}`)
+        || canonicalHostname === domain.replace(/^www\./, '')
     ));
 
     return { allowed, reason: allowed ? null : 'domain-not-allowed' };

@@ -51,8 +51,11 @@ ipcMain.handle('get-app-version', () => app.getVersion());
 let mainWindow;
 let surfView;
 let surfVisitSerial = 0;
-let blockedMainFrameNavigationSerial = 0;
 const debugInteractions = process.env.DEBUG_INTERACTIONS === 'true' || process.env.EVOSURF_DEBUG_INTERACTIONS === 'true';
+let updaterLockPath = null;
+let updaterLockOwned = false;
+let updaterListenersConfigured = false;
+let updateCheckInProgress = false;
 
 // Les erreurs réseau natives de Chromium sont conservées en mode diagnostic,
 // mais ne polluent pas le journal normal destiné aux visites.
@@ -154,9 +157,6 @@ function blockUnsafeSurfNavigation(event, detailsOrUrl, requireAllowedDomain = t
 
     event.preventDefault();
     const domain = hostnameForLog(details.url || '');
-    if (requireAllowedDomain && result.reason === 'domain-not-allowed') {
-        blockedMainFrameNavigationSerial = surfVisitSerial;
-    }
     emitSurfInteractionLog({
         type: 'security-block',
         action: 'navigation',
@@ -302,7 +302,7 @@ function emitSurfInteractionLog(payload) {
     }
 }
 
-function createSurfAdapter(visitSerial = 0) {
+function createSurfAdapter() {
     return createElectronSurfAdapter({
         getSurfView: () => surfView,
         setNavigationProfile: (deviceProfile, referrer) => {
@@ -312,17 +312,7 @@ function createSurfAdapter(visitSerial = 0) {
         setAllowedDomains: setActiveSurfAllowedDomains,
         setViewport: applySurfViewport,
         waitForSettle: waitForSurfViewToSettle,
-        shouldRecoverBlockedNavigation: (error) => {
-            const isBlockedRedirect = blockedMainFrameNavigationSerial === visitSerial;
-            const isExpectedLoadFailure = error?.code === 'ERR_FAILED'
-                || error?.errno === -2
-                || String(error?.message || '').includes('ERR_FAILED (-2)');
-
-            if (!isBlockedRedirect || !isExpectedLoadFailure) return false;
-
-            blockedMainFrameNavigationSerial = 0;
-            return true;
-        }
+        loadTimeoutMs: 30000,
     });
 }
 
@@ -495,142 +485,147 @@ function createWindow() {
 
     if (autoUpdater) {
         setTimeout(() => {
-            checkUpdates().catch((err) => {
-                console.error('[AutoUpdate] Erreur non gérée:', err?.message || err);
-            });
+            void checkUpdates();
         }, 8000);
     }
 }
 
-function checkUpdates() {
-    console.log('[AutoUpdate] ===== INITIALIZING UPDATE CHECK =====');
-    console.log('[AutoUpdate] App version:', app.getVersion());
-    console.log('[AutoUpdate] App name:', app.getName());
-
-    if (!app.isPackaged) {
-        console.log('[AutoUpdate] Development mode: update check skipped.');
-        return Promise.resolve(null);
-    }
-
-    if (!autoUpdater) {
-        console.warn('[AutoUpdate] autoUpdater is not available - skipping update check');
-        return Promise.resolve(null);
-    }
-
-    // Cibler explicitement le dépôt public des releases (Reltoweb/Evosurf)
-    autoUpdater.setFeedURL({
-        provider: 'github',
-        owner: 'Reltoweb',
-        repo: 'Evosurf'
-    });
-    console.log('[AutoUpdate] Feed URL configured for: Reltoweb/Evosurf');
-
-    autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = true;
-    console.log('[AutoUpdate] autoDownload=true, autoInstallOnAppQuit=true');
-
-    // Éviter que la vérification de signature bloque l'install (exe non signé ou erreur)
+function isProcessAlive(pid) {
+    if (!Number.isInteger(pid) || pid <= 0) return false;
     try {
-        autoUpdater.verifyUpdateCodeSignature = () => Promise.resolve(null);
-        console.log('[AutoUpdate] Signature verification disabled');
-    } catch (e) {
-        console.warn('[AutoUpdate] Could not disable signature verification:', e.message);
+        process.kill(pid, 0);
+        return true;
+    } catch (error) {
+        return false;
+    }
+}
+
+function acquireUpdaterLock() {
+    if (updaterLockOwned) return true;
+
+    updaterLockPath = path.join(app.getPath('appData'), 'EvoSurf-updater.lock');
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+            const descriptor = fs.openSync(updaterLockPath, 'wx');
+            fs.writeFileSync(descriptor, JSON.stringify({ pid: process.pid, createdAt: Date.now() }), 'utf8');
+            fs.closeSync(descriptor);
+            updaterLockOwned = true;
+            return true;
+        } catch (error) {
+            if (error?.code !== 'EEXIST') return false;
+
+            try {
+                const lock = JSON.parse(fs.readFileSync(updaterLockPath, 'utf8'));
+                if (isProcessAlive(Number(lock?.pid))) return false;
+                fs.unlinkSync(updaterLockPath);
+            } catch (readError) {
+                try { fs.unlinkSync(updaterLockPath); } catch (unlinkError) { return false; }
+            }
+        }
     }
 
-    autoUpdater.on('checking-for-update', () => {
-        console.log('[AutoUpdate] Checking for update...');
-    });
+    return false;
+}
+
+function releaseUpdaterLock() {
+    if (!updaterLockOwned || !updaterLockPath) return;
+    try {
+        const lock = JSON.parse(fs.readFileSync(updaterLockPath, 'utf8'));
+        if (Number(lock?.pid) === process.pid) fs.unlinkSync(updaterLockPath);
+    } catch (error) { /* ignore */ }
+    updaterLockOwned = false;
+}
+
+function configureUpdaterListeners() {
+    if (updaterListenersConfigured || !autoUpdater) return;
+    updaterListenersConfigured = true;
+
+    // Les événements utiles sont journalisés par EvoSurf. Le logger interne de
+    // electron-updater est volontairement silencieux pour éviter les doublons.
+    autoUpdater.logger = {
+        info: () => {},
+        warn: () => {},
+        error: () => {},
+        debug: () => {},
+    };
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = true;
 
     autoUpdater.on('update-available', (info) => {
-        console.log('[AutoUpdate] Update available:', info?.version || '');
-    });
-
-    autoUpdater.on('update-not-available', () => {
-        console.log('[AutoUpdate] Update not available.');
-    });
-
-    autoUpdater.on('download-progress', (progress) => {
-        console.log('[AutoUpdate] Download progress:', Math.round(progress.percent || 0) + '%');
+        viewerLogger.info(`Update ${info?.version || 'disponible'} found; download starting`);
     });
 
     autoUpdater.on('update-downloaded', (info) => {
-        console.log('[AutoUpdate] ===== EVENT: update-downloaded FIRED =====');
-        console.log('[AutoUpdate] Update info:', JSON.stringify(info || {}, null, 2));
-        console.log('[AutoUpdate] mainWindow exists?', !!mainWindow);
-
+        viewerLogger.info(`Update ${info?.version || ''} ready to install`);
         try {
             const result = dialog.showMessageBoxSync(mainWindow, {
                 type: 'info',
-                buttons: ['Redémarrer et Installer', 'Plus tard'],
+                buttons: ['Redémarrer et installer', 'Plus tard'],
                 title: 'Mise à jour prête',
                 message: "La nouvelle version est téléchargée. Vous pouvez l'installer maintenant, ou elle sera installée automatiquement à la fermeture de l'application.",
                 defaultId: 0,
                 cancelId: 1
             });
 
-            console.log('[AutoUpdate] Dialog response:', result);
-            console.log('[AutoUpdate] Response type:', typeof result);
+            if (result !== 0) return;
 
-            if (result === 0) {
-                console.log('[AutoUpdate] User clicked INSTALL - starting shutdown sequence...');
-
-                // Désactiver tous les listeners qui pourraient empêcher la fermeture
-                console.log('[AutoUpdate] Removing all window-all-closed listeners...');
-                app.removeAllListeners('window-all-closed');
-
-                // On tue proprement la fenêtre et la vue
-                if (mainWindow) {
-                    console.log('[AutoUpdate] Removing close listeners from mainWindow...');
-                    mainWindow.removeAllListeners('close');
-                    console.log('[AutoUpdate] Destroying mainWindow...');
-                    mainWindow.destroy();
-                    mainWindow = null;
-                }
-
-                // Détacher la BrowserView
-                if (surfView) {
-                    console.log('[AutoUpdate] Destroying surfView...');
-                    try {
-                        surfView.webContents.destroy();
-                    } catch (e) { /* ignore */ }
-                    surfView = null;
-                }
-
-                // Wrapping dans setImmediate pour laisser le cycle d'événements se terminer
-                setImmediate(() => {
-                    console.log('[AutoUpdate] In setImmediate - calling quitAndInstall(false, true)...');
-                    try {
-                        // (false, true) = (isSilent=false → affiche l'installeur, isForceRunAfter=true)
-                        autoUpdater.quitAndInstall(false, true);
-                        console.log('[AutoUpdate] quitAndInstall called');
-
-                        // Fallback : forcer app.quit() après un délai court si l'app tourne encore
-                        setTimeout(() => {
-                            console.log('[AutoUpdate] FALLBACK: Forcing app.quit()...');
-                            app.quit();
-                        }, 1000);
-                    } catch (err) {
-                        console.error('[AutoUpdate] ERROR calling quitAndInstall:', err);
-                        console.log('[AutoUpdate] Forcing app.quit() due to error');
-                        app.quit();
-                    }
-                });
-            } else {
-                console.log('[AutoUpdate] User clicked LATER - update will install on app quit');
+            app.removeAllListeners('window-all-closed');
+            if (mainWindow) {
+                mainWindow.removeAllListeners('close');
+                mainWindow.destroy();
+                mainWindow = null;
             }
-        } catch (err) {
-            console.error('[AutoUpdate] ERROR in update-downloaded handler:', err);
-            console.error('[AutoUpdate] Error stack:', err?.stack);
+            if (surfView) {
+                try { surfView.webContents.destroy(); } catch (error) { /* ignore */ }
+                surfView = null;
+            }
+
+            setImmediate(() => {
+                try {
+                    autoUpdater.quitAndInstall(false, true);
+                    setTimeout(() => app.quit(), 1000);
+                } catch (error) {
+                    viewerLogger.error(`Update installation failed: ${error?.message || error}`);
+                    app.quit();
+                }
+            });
+        } catch (error) {
+            viewerLogger.error(`Update dialog failed: ${error?.message || error}`);
         }
     });
 
-    autoUpdater.on('error', (err) => {
-        console.error('[AutoUpdate] Erreur:', err?.message || err);
+    autoUpdater.on('error', (error) => {
+        viewerLogger.debug(`Update unavailable: ${error?.message || error}`);
     });
+}
 
-    return autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-        console.error('[AutoUpdate] checkForUpdatesAndNotify failed:', err?.message || err);
-    });
+async function checkUpdates() {
+    if (!app.isPackaged || !autoUpdater || updateCheckInProgress) return null;
+
+    const updateConfigPath = path.join(process.resourcesPath, 'app-update.yml');
+    if (!fs.existsSync(updateConfigPath)) {
+        viewerLogger.debug('AutoUpdate skipped: packaged test build without app-update.yml');
+        return null;
+    }
+
+    // Plusieurs profils peuvent surfer simultanément, mais une seule instance
+    // par machine doit télécharger et préparer la mise à jour.
+    if (!acquireUpdaterLock()) return null;
+
+    configureUpdaterListeners();
+    updateCheckInProgress = true;
+    try {
+        const result = await autoUpdater.checkForUpdates();
+        if (result?.isUpdateAvailable) {
+            await autoUpdater.downloadUpdate(result.cancellationToken);
+        }
+        return result;
+    } catch (error) {
+        viewerLogger.warn(`Update check failed: ${error?.message || error}`);
+        return null;
+    } finally {
+        updateCheckInProgress = false;
+    }
 }
 
 /**
@@ -751,30 +746,36 @@ function setupSurfView() {
 // ---------------------------------------------------------------------------
 ipcMain.on('start-visit', async (event, payload) => {
     const visitSerial = ++surfVisitSerial;
-    blockedMainFrameNavigationSerial = 0;
+    let pageReadySent = false;
     try {
         await runVisit({
             payload,
-            adapter: createSurfAdapter(visitSerial),
+            adapter: createSurfAdapter(),
             emitLog: emitSurfInteractionLog,
-            isCurrent: () => visitSerial === surfVisitSerial
-        });
-        if (visitSerial === surfVisitSerial && mainWindow && !mainWindow.isDestroyed()) {
-            const metadata = payload?.metadata || {};
-            const duration = Math.max(0, Number(metadata.duration) || 0);
-            const pointsValue = Math.max(0, Number(metadata.creditsExpected) || 0);
-            const points = pointsValue.toFixed(2).replace(/\.?0+$/, '');
-            const url = sanitizeLogText(payload?.target?.url || payload?.url, 'URL inconnue', 2048);
+            isCurrent: () => visitSerial === surfVisitSerial,
+            onPageReady: () => {
+                if (pageReadySent || visitSerial !== surfVisitSerial || !mainWindow || mainWindow.isDestroyed()) {
+                    return;
+                }
 
-            surfVisitCounter++;
-            viewerLogger.visit(surfVisitCounter, points, duration, url);
-            mainWindow.webContents.send('visit-ready');
-        }
+                pageReadySent = true;
+                const metadata = payload?.metadata || {};
+                const duration = Math.max(0, Number(metadata.duration) || 0);
+                const pointsValue = Math.max(0, Number(metadata.creditsExpected) || 0);
+                const points = pointsValue.toFixed(2).replace(/\.?0+$/, '');
+                const url = sanitizeLogText(payload?.target?.url || payload?.url, 'URL inconnue', 2048);
+
+                surfVisitCounter++;
+                viewerLogger.visit(surfVisitCounter, points, duration, url);
+                mainWindow.webContents.send('visit-ready');
+            }
+        });
     } catch (e) {
         viewerLogger.debug(`Mission failed: ${e?.message || e || 'Unknown error'}`);
-        if (visitSerial === surfVisitSerial && mainWindow && !mainWindow.isDestroyed()) {
+        if (!pageReadySent && visitSerial === surfVisitSerial && mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('visit-failed', {
                 message: e?.message || String(e),
+                code: e?.code || null,
                 url: payload?.target?.url || payload?.url || null,
             });
         }
@@ -784,7 +785,6 @@ ipcMain.on('start-visit', async (event, payload) => {
 ipcMain.on('stop-visit', () => {
     try {
         surfVisitSerial++;
-        blockedMainFrameNavigationSerial = 0;
         activeSurfNavigationProfile = DEVICE_PROFILES.desktop;
         activeSurfReferrer = null;
         activeSurfAllowedDomains = new Set();
@@ -829,4 +829,8 @@ if (!gotTheLock) {
 // Fermeture normale : quitter quand toutes les fenêtres sont fermées.
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('before-quit', () => {
+    releaseUpdaterLock();
 });

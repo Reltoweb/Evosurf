@@ -1,15 +1,15 @@
 {
     "name": "evosurf-client",
-    "version": "1.1.9",
+    "version": "1.1.10",
     "description": "Official EvoSurf Viewer",
     "main": "main.js",
     "scripts": {
         "start": "electron .",
-        "test:security": "node --test tests/navigation-policy.test.js tests/logger.test.js tests/electron-surf-adapter.test.js",
+        "test:security": "node --test tests/navigation-policy.test.js tests/logger.test.js tests/electron-surf-adapter.test.js tests/visit-runner.test.js tests/updater-security.test.js",
         "icon": "node convert_icon.js",
         "build": "node build-env.js && electron-builder",
         "build:clean": "node build-env.js && node -e \"const fs=require('fs'); ['dist','app'].forEach(d=>{if(fs.existsSync(d)){fs.rmSync(d,{recursive:true});console.log(d+'/ supprimé');}})\" && electron-builder",
-        "build:secure": "node build-env.js && node build_obfuscated.js && cd app && npm install --production && cd .. && electron-builder",
+        "build:secure": "node build-env.js && node build_obfuscated.js && cd app && npm install --omit=dev && cd .. && electron-builder --config.directories.app=app",
         "pack": "electron-builder --dir",
         "deploy": "npm run build:secure -- --publish always"
     },
@@ -18,6 +18,7 @@
         "productName": "EvoSurf",
         "artifactName": "${productName}-Setup-${version}.${ext}",
         "directories": {
+            "app": ".",
             "output": "dist",
             "buildResources": "build"
         },
@@ -69,7 +70,8 @@
             "!docs/*",
             "!.git/*",
             "!.env",
-            "!dist/**"
+            "!dist/**",
+            "!release-audit-*/**"
         ]
     },
     "author": "AutoSurf",
