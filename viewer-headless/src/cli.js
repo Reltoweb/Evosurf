@@ -253,7 +253,17 @@ async function runWorker() {
                 payload: visitConfig,
                 adapter: activeAdapter,
                 emitLog: payload => logger.interaction(payload),
-                isCurrent: () => !stopping
+                isCurrent: () => !stopping,
+                onPageReady: () => {
+                    if (stopping) return;
+                    visitCounter += 1;
+                    logger.visit(
+                        visitCounter,
+                        formatPoints(mission.credits_expected),
+                        durationSeconds,
+                        mission.url
+                    );
+                }
             });
             const durationTask = delay(durationSeconds * 1000);
 
@@ -263,9 +273,7 @@ async function runWorker() {
                 break;
             }
 
-            const validation = await api.validateVisit(mission.view_token);
-            visitCounter += 1;
-            logger.visit(visitCounter, formatPoints(validation.credits_earned), durationSeconds, mission.url);
+            await api.validateVisit(mission.view_token);
         } catch (error) {
             logger.error(`Mission failed: ${error.message}`);
             logger.debug('Mission failure details', {
