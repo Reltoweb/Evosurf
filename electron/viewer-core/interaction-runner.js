@@ -1,4 +1,4 @@
-const { clampNumber, delay, randomDelay } = require('./timing');
+const { clampNumber, delay, randomDelayMs, sleepRandom } = require('./timing');
 
 function pickVisitAction(probabilities = {}) {
     const scroll = clampNumber(probabilities.scroll, 0, 100);
@@ -698,7 +698,7 @@ async function executeHumanClick(adapter, clickConfig = {}, allowedDomains = [])
 
         if (index < requestedClickCount - 1) {
             const navigationSettled = adapter.waitForSettle ? await adapter.waitForSettle(9000) : false;
-            await delay(randomDelay(5000, 25000));
+            await sleepRandom(5000, 25000);
         }
     }
 

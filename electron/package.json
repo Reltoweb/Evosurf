@@ -1,11 +1,11 @@
 {
     "name": "evosurf-client",
-    "version": "1.1.10",
+    "version": "1.2.0",
     "description": "Official EvoSurf Viewer",
     "main": "main.js",
     "scripts": {
         "start": "electron .",
-        "test:security": "node --test tests/navigation-policy.test.js tests/logger.test.js tests/electron-surf-adapter.test.js tests/visit-runner.test.js tests/updater-security.test.js",
+        "test:security": "node --test tests/navigation-policy.test.js tests/logger.test.js tests/electron-surf-adapter.test.js tests/visit-runner.test.js tests/updater-security.test.js tests/timing.test.js tests/interaction-runner.test.js",
         "icon": "node convert_icon.js",
         "build": "node build-env.js && electron-builder",
         "build:clean": "node build-env.js && node -e \"const fs=require('fs'); ['dist','app'].forEach(d=>{if(fs.existsSync(d)){fs.rmSync(d,{recursive:true});console.log(d+'/ supprimé');}})\" && electron-builder",

@@ -2,6 +2,43 @@ const { app, BrowserWindow, BrowserView, ipcMain, session, dialog, shell } = req
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+
+// ---------------------------------------------------------------------------
+// FILTRE CONSOLE — masquer le bruit Electron non fatal
+//
+// Quand une URL de site surfé ne se résout pas (ex. ERR_NAME_NOT_RESOLVED sur
+// des sites démo/non résolvables), Electron émet sur stderr une ligne bruyante
+// du type « (node:PID) electron: Failed to load URL: ... ». Ces erreurs sont
+// DÉJÀ gérées : le viewer les traite via did-fail-load + le rejet de loadURL
+// dans le visit-runner, qui déclenche un retry sur le site suivant. Elles ne
+// sont donc pas fatales, juste du bruit pour l'opérateur.
+//
+// On filtre ces lignes spécifiques au niveau du process stderr pour garder une
+// console lisible (logs de visite INFO uniquement). On ne supprime PAS les
+// autres erreurs (true errors, stack traces, etc.).
+// ---------------------------------------------------------------------------
+(function installErrorNoiseFilter() {
+    const NOISE_PATTERNS = [
+        /^\(node:\d+\) electron: Failed to load URL: .* with error: ERR_NAME_NOT_RESOLVED/i,
+        /^\(node:\d+\) electron: Failed to load URL: .* with error: ERR_INTERNET_DISCONNECTED/i,
+        /^\(node:\d+\) electron: Failed to load URL: .* with error: ERR_CONNECTION_/i,
+        /^\(node:\d+\) electron: Failed to load URL: .* with error: ERR_TIMED_OUT/i,
+    ];
+    const isNoise = (line) => {
+        if (typeof line !== 'string') return false;
+        const trimmed = line.replace(/\r/g, '').trim();
+        return NOISE_PATTERNS.some((re) => re.test(trimmed));
+    };
+
+    const origStderrWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = function (chunk, encoding, callback) {
+        if (isNoise(typeof chunk === 'string' ? chunk : chunk ? chunk.toString() : '')) {
+            if (typeof callback === 'function') callback();
+            return true;
+        }
+        return origStderrWrite(chunk, encoding, callback);
+    };
+})();
 const SecureStorage = require('./secure_storage');
 const {
     CHROME_USER_AGENT,
