@@ -131,7 +131,6 @@ jobs:
         working-directory: electron
         env:
           CLIENT_URL: https://www.evosurf.fr/surf/client
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm ci
           npm run test:security
@@ -180,3 +179,4 @@ jobs:
           else
             gh release create "$tag" $files --title "$tag" --notes "EvoSurf viewer Windows installer, headless Linux archive and Docker image."
           fi
+          gh release edit "$tag" --draft=false --prerelease=false --title "$tag"
