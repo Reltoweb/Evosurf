@@ -1,13 +1,14 @@
 {
   "name": "evosurf-viewer-headless",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "private": true,
   "description": "EvoSurf headless viewer worker for Linux and Docker",
   "main": "src/cli.js",
   "scripts": {
     "start": "node src/cli.js",
     "smoke:local": "node src/smoke-local.js",
-    "check": "node --check src/cli.js && node --check src/api-client.js && node --check src/config.js && node --check src/logger.js && node --check src/playwright-adapter.js && node --check src/smoke-local.js && node --check src/update-checker.js"
+    "test": "node --test tests/*.test.js",
+    "check": "node --check src/cli.js && node --check src/api-client.js && node --check src/config.js && node --check src/logger.js && node --check src/playwright-adapter.js && node --check src/runtime-guard.js && node --check src/smoke-local.js && node --check src/update-checker.js"
   },
   "dependencies": {
     "playwright": "1.60.0"

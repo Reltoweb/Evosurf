@@ -66,19 +66,27 @@ class ApiClient {
             viewer_platform: this.config.viewerPlatform
         });
 
+        params.append('control_capabilities[]', 'restart_runtime');
+
         return this.request(`/surf/next?${params.toString()}`, {
             method: 'GET'
         });
     }
 
-    heartbeat() {
+    heartbeat(telemetry = {}) {
         return this.request('/surf/heartbeat', {
             method: 'POST',
             body: JSON.stringify({
                 session_id: this.config.sessionId,
                 app_version: this.config.appVersion,
                 viewer_runtime: this.config.viewerRuntime,
-                viewer_platform: this.config.viewerPlatform
+                viewer_platform: this.config.viewerPlatform,
+                viewer_state: telemetry.viewerState || 'waiting',
+                current_website_id: telemetry.currentWebsiteId || null,
+                last_completed_at: telemetry.lastCompletedAt || null,
+                last_error_code: telemetry.lastErrorCode || null,
+                consecutive_failures: telemetry.consecutiveFailures || 0,
+                control_capabilities: ['restart_runtime']
             })
         });
     }
@@ -91,7 +99,23 @@ class ApiClient {
                 session_id: this.config.sessionId,
                 app_version: this.config.appVersion,
                 viewer_runtime: this.config.viewerRuntime,
-                viewer_platform: this.config.viewerPlatform
+                viewer_platform: this.config.viewerPlatform,
+                control_capabilities: ['restart_runtime']
+            })
+        });
+    }
+
+    cancelVisit(viewToken, reason = 'runtime_failure') {
+        return this.request('/surf/cancel', {
+            method: 'POST',
+            body: JSON.stringify({
+                view_token: viewToken,
+                reason,
+                session_id: this.config.sessionId,
+                app_version: this.config.appVersion,
+                viewer_runtime: this.config.viewerRuntime,
+                viewer_platform: this.config.viewerPlatform,
+                control_capabilities: ['restart_runtime']
             })
         });
     }

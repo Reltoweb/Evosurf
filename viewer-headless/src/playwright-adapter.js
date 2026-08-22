@@ -4,9 +4,10 @@ const {
     SEC_CH_UA_MOBILE,
     SEC_CH_UA_PLATFORM
 } = require('../../electron/viewer-core');
+const { withTimeout } = require('./runtime-guard');
 
 function buildClientHintHeaders(deviceProfile = {}) {
-    const hints = deviceProfile.clientHints || {};
+    const hints = deviceProfile?.clientHints || {};
 
     return {
         'sec-ch-ua': SEC_CH_UA,
@@ -28,7 +29,10 @@ async function launchBrowser(config) {
     });
 }
 
-function createPlaywrightSurfAdapter({ browser, config, logger }) {
+function createPlaywrightSurfAdapter({ browser, config, logger, onRuntimeFailure = () => {} }) {
+    const navigationTimeoutMs = Math.max(10, Number(config.navigationTimeoutMs) || 30000);
+    const operationTimeoutMs = Math.max(10, Number(config.operationTimeoutMs) || navigationTimeoutMs);
+    const cleanupTimeoutMs = Math.max(10, Number(config.cleanupTimeoutMs) || 10000);
     let context = null;
     let page = null;
     let deviceProfile = null;
@@ -40,13 +44,17 @@ function createPlaywrightSurfAdapter({ browser, config, logger }) {
         if (page) {
             const currentPage = page;
             page = null;
-            await currentPage.close().catch(() => {});
+            await withTimeout(currentPage.close(), cleanupTimeoutMs, 'page.close').catch(error => {
+                onRuntimeFailure(error);
+            });
         }
 
         if (context) {
             const currentContext = context;
             context = null;
-            await currentContext.close().catch(() => {});
+            await withTimeout(currentContext.close(), cleanupTimeoutMs, 'context.close').catch(error => {
+                onRuntimeFailure(error);
+            });
         }
     }
 
@@ -87,12 +95,12 @@ function createPlaywrightSurfAdapter({ browser, config, logger }) {
             };
 
             context = await browser.newContext(contextOptions);
-            context.setDefaultNavigationTimeout(config.navigationTimeoutMs);
-            context.setDefaultTimeout(config.navigationTimeoutMs);
+            context.setDefaultNavigationTimeout(navigationTimeoutMs);
+            context.setDefaultTimeout(navigationTimeoutMs);
 
             page = await context.newPage();
-            page.setDefaultNavigationTimeout(config.navigationTimeoutMs);
-            page.setDefaultTimeout(config.navigationTimeoutMs);
+            page.setDefaultNavigationTimeout(navigationTimeoutMs);
+            page.setDefaultTimeout(navigationTimeoutMs);
 
             page.on('popup', async popup => {
                 await popup.close().catch(() => {});
@@ -100,6 +108,12 @@ function createPlaywrightSurfAdapter({ browser, config, logger }) {
 
             page.on('download', async download => {
                 await download.cancel().catch(() => {});
+            });
+
+            page.on('crash', () => {
+                const error = new Error('Chromium renderer crashed');
+                error.code = 'EVOSURF_RENDERER_CRASHED';
+                onRuntimeFailure(error);
             });
 
             if (audioMuted && page.evaluate) {
@@ -123,7 +137,7 @@ function createPlaywrightSurfAdapter({ browser, config, logger }) {
 
             await page.goto(url, {
                 waitUntil: 'domcontentloaded',
-                timeout: config.navigationTimeoutMs,
+                timeout: navigationTimeoutMs,
                 referer: options.httpReferrer || referrer || undefined
             });
         },
@@ -140,7 +154,10 @@ function createPlaywrightSurfAdapter({ browser, config, logger }) {
                 throw new Error('Aucune page active pour evaluate()');
             }
 
-            return page.evaluate(script);
+            return withTimeout(page.evaluate(script), operationTimeoutMs, 'page.evaluate').catch(error => {
+                onRuntimeFailure(error);
+                throw error;
+            });
         },
 
         async stop() {

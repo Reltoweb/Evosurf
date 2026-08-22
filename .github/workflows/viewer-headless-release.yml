@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "viewer-v*"
-      - "viewer-headless-v*"
   workflow_dispatch:
 
 permissions:
@@ -12,7 +11,25 @@ permissions:
   packages: write
 
 jobs:
+  version-consistency:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Verify release tag and embedded versions
+        shell: bash
+        run: node viewer-headless/scripts/check-release-version.js "$GITHUB_REF_NAME"
+
   linux-docker:
+    needs:
+      - version-consistency
     runs-on: ubuntu-latest
 
     steps:
@@ -31,6 +48,7 @@ jobs:
         run: |
           npm ci
           npm run check
+          npm test
 
       - name: Build Linux archive
         run: |
@@ -94,6 +112,8 @@ jobs:
           short-description: Official EvoSurf headless viewer for Docker.
 
   windows:
+    needs:
+      - version-consistency
     runs-on: windows-latest
 
     steps:

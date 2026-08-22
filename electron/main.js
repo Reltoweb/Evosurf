@@ -88,6 +88,10 @@ ipcMain.handle('get-app-version', () => app.getVersion());
 let mainWindow;
 let surfView;
 let surfVisitSerial = 0;
+let surfSessionConfigured = false;
+let surfRuntimeRecoveryInProgress = false;
+let viewerRestartInProgress = false;
+let surfRuntimeRecoveryAttempts = [];
 const debugInteractions = process.env.DEBUG_INTERACTIONS === 'true' || process.env.EVOSURF_DEBUG_INTERACTIONS === 'true';
 let updaterLockPath = null;
 let updaterLockOwned = false;
@@ -350,14 +354,44 @@ function createSurfAdapter() {
         setViewport: applySurfViewport,
         waitForSettle: waitForSurfViewToSettle,
         loadTimeoutMs: 30000,
+        operationTimeoutMs: 30000,
+        stopTimeoutMs: 5000,
     });
 }
 
 function setupSurfSession() {
     const surfSess = session.fromPartition(SURF_SESSION_PARTITION);
 
+    if (surfSessionConfigured) {
+        return surfSess;
+    }
+
     // ----- Stealth : User-Agent + Referer + Client Hints sur la session surf -----
     surfSess.setUserAgent(CHROME_USER_AGENT);
+
+    // Pre-remplir les cookies de consentement YouTube (CONSENT + SOCS) sur
+    // .youtube.com. Sans cela, la session vierge (partition jetable) declenche
+    // la redirection vers consent.youtube.com (page RGPD) qui bloque le lecteur,
+    // notamment pour les Shorts.
+    try {
+        const consentCookies = [
+            { name: 'CONSENT', value: 'PENDING+987', domain: '.youtube.com', path: '/' },
+            { name: 'SOCS', value: 'CAISNQgDEitibkFwbW9QR2dVUDMyY2hGRmotYzdpZjJqbFhZeGdFZ0g2ZzBLNlpXdm5YYzJxLXY4QW94', domain: '.youtube.com', path: '/' },
+        ];
+        const expireTs = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30; // +30j
+        for (const c of consentCookies) {
+            surfSess.cookies.set({
+                url: 'https://www.youtube.com/',
+                name: c.name,
+                value: c.value,
+                domain: c.domain,
+                path: c.path,
+                secure: true,
+                httpOnly: false,
+                expirationDate: expireTs,
+            }).catch(() => {});
+        }
+    } catch (e) { /* non bloquant */ }
 
     // Les sites autosurf sont non fiables et n'ont besoin d'aucune permission native.
     surfSess.setPermissionCheckHandler(() => false);
@@ -442,6 +476,7 @@ function setupSurfSession() {
         callback({ cancel: false, responseHeaders });
     });
 
+    surfSessionConfigured = true;
     return surfSess;
 }
 
@@ -496,6 +531,14 @@ function createWindow() {
             viewerLogger.info('Connection: Ready');
             viewerLogger.info('Surf is about to start');
         }
+    });
+
+    mainWindow.webContents.on('render-process-gone', (_event, details) => {
+        if (viewerRestartInProgress || details?.reason === 'clean-exit') return;
+        viewerRestartInProgress = true;
+        viewerLogger.error(`Main renderer stopped (${details?.reason || 'unknown'}); relaunching viewer`);
+        app.relaunch();
+        app.exit(70);
     });
 
     mainWindow.webContents.on('page-title-updated', (event) => {
@@ -696,7 +739,7 @@ function setupSurfView() {
             sandbox: true,
             disableDialogs: true,
             navigateOnDragDrop: false,
-            autoplayPolicy: 'document-user-activation-required',
+            autoplayPolicy: 'no-user-gesture-required',
             session: surfSess,
             backgroundThrottling: false,
             userAgent: CHROME_USER_AGENT,
@@ -769,12 +812,106 @@ function setupSurfView() {
         callback(false);
     });
 
+    // Auto-acceptation du consentement RGPD YouTube.
+    // En session vierge (partition jetable), YouTube redirige les Shorts (et
+    // certaines URL watch) vers consent.youtube.com, ce qui bloque le lecteur
+    // (0 vue). Le cookie CONSENT seul ne suffit pas : YouTube exige un clic.
+    // On detecte le chargement de la page de consent et on clique "Tout accepter".
+    surfView.webContents.on('did-finish-load', () => {
+        let currentUrl = '';
+        try { currentUrl = surfView.webContents.getURL(); } catch (e) { return; }
+        if (!/consent\.youtube\.com/i.test(currentUrl)) return;
+
+        const acceptScript = `
+            (async () => {
+                const btns = Array.from(document.querySelectorAll('button, a, [role="button"]'));
+                const acc = btns.find(b => /tout accepter|accepter tout|accept all|agree to all|i agree|agree/i.test((b.textContent||'')+' '+(b.getAttribute('aria-label')||'')));
+                if (acc) { acc.click(); return 'clicked'; }
+                return 'no-button';
+            })();
+        `;
+        Promise.resolve()
+            .then(() => surfView.webContents.executeJavaScript(acceptScript, true))
+            .then((result) => {
+                if (result === 'clicked') {
+                    emitSurfInteractionLog({ type: 'info', action: 'youtube-consent-accepted' });
+                }
+            })
+            .catch(() => { /* page peut avoir navigue entre-temps */ });
+    });
+
     // Remonter les erreurs de chargement pour debug (timeout, DNS, etc.)
     surfView.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
         if (errorCode !== -3) { // -3 = ERR_ABORTED (navigation annulée volontairement, normal)
             viewerLogger.debug(`Load failed: ${hostnameForLog(validatedURL)} — ${errorDescription} (${errorCode})`);
         }
     });
+
+    const observedSurfView = surfView;
+    surfView.webContents.on('render-process-gone', (_event, details) => {
+        if (observedSurfView !== surfView || surfRuntimeRecoveryInProgress || viewerRestartInProgress) return;
+        const reason = details?.reason || 'renderer-gone';
+        viewerLogger.warn(`Surf renderer stopped (${reason}); rebuilding isolated view`);
+        setTimeout(() => recoverSurfRuntime(`renderer_${reason}`, true), 0);
+    });
+}
+
+function recoverSurfRuntime(reason = 'runtime_recovery', notifyFailure = false) {
+    if (surfRuntimeRecoveryInProgress || viewerRestartInProgress || !mainWindow || mainWindow.isDestroyed()) {
+        return false;
+    }
+
+    const recoveryWindowStart = Date.now() - (5 * 60 * 1000);
+    surfRuntimeRecoveryAttempts = surfRuntimeRecoveryAttempts.filter(timestamp => timestamp >= recoveryWindowStart);
+    surfRuntimeRecoveryAttempts.push(Date.now());
+    if (surfRuntimeRecoveryAttempts.length > 3) {
+        viewerRestartInProgress = true;
+        viewerLogger.error('Surf runtime recovery limit reached; relaunching complete viewer');
+        app.relaunch();
+        app.exit(72);
+        return false;
+    }
+
+    surfRuntimeRecoveryInProgress = true;
+    surfVisitSerial++;
+    activeSurfNavigationProfile = DEVICE_PROFILES.desktop;
+    activeSurfReferrer = null;
+    activeSurfAllowedDomains = new Set();
+
+    const previousView = surfView;
+    surfView = null;
+    try {
+        mainWindow.setBrowserView(null);
+    } catch (error) { /* view peut déjà être détachée */ }
+
+    if (previousView && !previousView.webContents.isDestroyed()) {
+        try { previousView.webContents.destroy(); } catch (error) { /* renderer déjà mort */ }
+    }
+
+    try {
+        setupSurfView();
+        viewerLogger.info(`Surf runtime recovered (${reason})`);
+        if (notifyFailure && mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('visit-failed', {
+                message: 'Le moteur de navigation a été relancé automatiquement.',
+                code: 'EVOSURF_RENDERER_RECOVERED',
+            });
+        }
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('surf-runtime-recovered', { reason });
+        }
+        return true;
+    } catch (error) {
+        viewerLogger.error(`Surf runtime recovery failed: ${error?.message || error}`);
+        if (!viewerRestartInProgress) {
+            viewerRestartInProgress = true;
+            app.relaunch();
+            app.exit(71);
+        }
+        return false;
+    } finally {
+        surfRuntimeRecoveryInProgress = false;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -809,12 +946,16 @@ ipcMain.on('start-visit', async (event, payload) => {
         });
     } catch (e) {
         viewerLogger.debug(`Mission failed: ${e?.message || e || 'Unknown error'}`);
-        if (!pageReadySent && visitSerial === surfVisitSerial && mainWindow && !mainWindow.isDestroyed()) {
+        const runtimeFailure = ['EVOSURF_RUNTIME_TIMEOUT', 'EVOSURF_RENDERER_CRASHED', 'EVOSURF_BROWSER_DISCONNECTED', 'EVOSURF_SURF_VIEW_UNAVAILABLE'].includes(e?.code);
+        if ((!pageReadySent || runtimeFailure) && visitSerial === surfVisitSerial && mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('visit-failed', {
                 message: e?.message || String(e),
                 code: e?.code || null,
                 url: payload?.target?.url || payload?.url || null,
             });
+        }
+        if (runtimeFailure && visitSerial === surfVisitSerial) {
+            recoverSurfRuntime(e.code, false);
         }
     }
 });
@@ -826,11 +967,24 @@ ipcMain.on('stop-visit', () => {
         activeSurfReferrer = null;
         activeSurfAllowedDomains = new Set();
         if (surfView && !surfView.webContents.isDestroyed()) {
-            createSurfAdapter().stop();
+            void createSurfAdapter().stop().catch(() => {});
         }
     } catch (e) {
         console.error("[Electron] Stop visit error:", e);
     }
+});
+
+ipcMain.on('recover-surf-runtime', (event, reason) => {
+    if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return;
+    recoverSurfRuntime(sanitizeLogText(reason, 'client_watchdog', 80), false);
+});
+
+ipcMain.on('restart-viewer-runtime', (event) => {
+    if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents || viewerRestartInProgress) return;
+    viewerRestartInProgress = true;
+    viewerLogger.warn('Remote runtime restart received');
+    app.relaunch();
+    app.exit(75);
 });
 
 ipcMain.on('visit-duration-met', () => {

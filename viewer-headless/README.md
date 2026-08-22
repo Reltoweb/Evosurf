@@ -105,7 +105,6 @@ Cree ensuite `/opt/evosurf-viewer-headless/.env` :
 EVOSURF_BASE_URL=https://www.evosurf.fr
 ACCESS_KEY=TA_CLE_ACCESS
 SESSION_ID=vps-1-linux-1
-APP_VERSION=1.1.8
 VIEWER_RUNTIME=headless
 VIEWER_PLATFORM=linux
 UPDATE_CHECK_ENABLED=true

@@ -1,15 +1,21 @@
+const { withTimeout } = require('../timing');
+
 function createElectronSurfAdapter({
     getSurfView,
     setNavigationProfile,
     setAllowedDomains,
     setViewport,
     waitForSettle,
-    loadTimeoutMs = 30000
+    loadTimeoutMs = 30000,
+    operationTimeoutMs = 30000,
+    stopTimeoutMs = 5000
 }) {
     const getWebContents = () => {
         const surfView = getSurfView();
         if (!surfView || surfView.webContents.isDestroyed()) {
-            throw new Error('Surf view indisponible');
+            const error = new Error('Surf view indisponible');
+            error.code = 'EVOSURF_SURF_VIEW_UNAVAILABLE';
+            throw error;
         }
         return surfView.webContents;
     };
@@ -64,7 +70,12 @@ function createElectronSurfAdapter({
         },
 
         evaluate(script) {
-            return getWebContents().executeJavaScript(script, true);
+            const webContents = getWebContents();
+            return withTimeout(
+                webContents.executeJavaScript(script, true),
+                operationTimeoutMs,
+                'surf evaluate'
+            );
         },
 
         waitForSettle(timeoutMs) {
@@ -74,7 +85,7 @@ function createElectronSurfAdapter({
         stop() {
             const webContents = getWebContents();
             webContents.stop();
-            return webContents.loadURL('about:blank').catch(() => {});
+            return withTimeout(webContents.loadURL('about:blank'), stopTimeoutMs, 'surf stop').catch(() => {});
         }
     };
 }

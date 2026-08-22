@@ -38,6 +38,7 @@ viewer-headless/package.json
 viewer-headless/package-lock.json
 viewer-headless/src/
 viewer-headless/scripts/
+viewer-headless/tests/
 ```
 
 Dans le repo public, le fichier :

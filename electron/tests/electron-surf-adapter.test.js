@@ -7,11 +7,14 @@ function createAdapter(loadURL, options = {}) {
         isDestroyed: () => false,
         loadURL,
         stop: options.stop || (() => {}),
+        executeJavaScript: options.executeJavaScript || (async () => true),
     };
 
     return createElectronSurfAdapter({
         getSurfView: () => ({ webContents }),
         loadTimeoutMs: options.loadTimeoutMs,
+        operationTimeoutMs: options.operationTimeoutMs,
+        stopTimeoutMs: options.stopTimeoutMs,
     });
 }
 
@@ -24,6 +27,18 @@ test('keeps a blocked external redirect as a failed mission', async () => {
     });
 
     await assert.rejects(adapter.loadURL('https://example.test/'), error);
+});
+
+test('bounds a renderer evaluation that never settles', async () => {
+    const adapter = createAdapter(async () => {}, {
+        operationTimeoutMs: 15,
+        executeJavaScript: () => new Promise(() => {}),
+    });
+
+    await assert.rejects(
+        adapter.evaluate('document.title'),
+        error => error?.code === 'EVOSURF_RUNTIME_TIMEOUT'
+    );
 });
 
 test('keeps genuine load failures as failed missions', async () => {

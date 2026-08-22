@@ -8,6 +8,25 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function withTimeout(promise, timeoutMs, label = 'operation') {
+    const timeout = Math.max(10, Number(timeoutMs) || 0);
+    let timeoutId = null;
+
+    return Promise.race([
+        Promise.resolve(promise),
+        new Promise((resolve, reject) => {
+            timeoutId = setTimeout(() => {
+                const error = new Error(`${label} timed out after ${timeout}ms`);
+                error.code = 'EVOSURF_RUNTIME_TIMEOUT';
+                error.operation = label;
+                reject(error);
+            }, timeout);
+        })
+    ]).finally(() => {
+        if (timeoutId) clearTimeout(timeoutId);
+    });
+}
+
 // Génère un délai aléatoire en millisecondes, borné [minMs, maxMs].
 // Nom explicite (*Ms) pour éviter la confusion secondes/millisecondes.
 function randomDelayMs(minMs, maxMs) {
@@ -35,6 +54,7 @@ function randomDelay(minMs, maxMs) {
 module.exports = {
     clampNumber,
     delay,
+    withTimeout,
     randomDelayMs,
     sleepRandom,
     randomDelay, // alias déprécié (compat)

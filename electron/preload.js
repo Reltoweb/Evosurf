@@ -9,6 +9,14 @@ contextBridge.exposeInMainWorld('electronViewer', {
         ipcRenderer.send('stop-visit');
     },
 
+    recoverRuntime: (reason) => {
+        ipcRenderer.send('recover-surf-runtime', reason);
+    },
+
+    restartRuntime: () => {
+        ipcRenderer.send('restart-viewer-runtime');
+    },
+
     sendDurationMet: () => {
         ipcRenderer.send('visit-duration-met');
     },
@@ -31,6 +39,11 @@ contextBridge.exposeInMainWorld('electronViewer', {
     onInteractionLog: (callback) => {
         ipcRenderer.removeAllListeners('surf-interaction-log');
         ipcRenderer.on('surf-interaction-log', (_event, payload) => callback(payload));
+    },
+
+    onRuntimeRecovered: (callback) => {
+        ipcRenderer.removeAllListeners('surf-runtime-recovered');
+        ipcRenderer.on('surf-runtime-recovered', (_event, payload) => callback(payload));
     },
 
     onStartupError: (callback) => {

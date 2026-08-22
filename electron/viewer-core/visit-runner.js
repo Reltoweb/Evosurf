@@ -76,6 +76,10 @@ async function runVisit({ payload, adapter, emitLog, isCurrent = () => true, onP
             reason: 'interaction-failed',
             error: error?.message || String(error)
         });
+
+        if (['EVOSURF_RUNTIME_TIMEOUT', 'EVOSURF_RENDERER_CRASHED', 'EVOSURF_BROWSER_DISCONNECTED', 'EVOSURF_SURF_VIEW_UNAVAILABLE'].includes(error?.code)) {
+            throw error;
+        }
     }
 }
 
