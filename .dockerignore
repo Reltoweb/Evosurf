@@ -4,3 +4,6 @@
 !electron/
 !electron/viewer-core/
 !electron/viewer-core/**
+!public/
+!public/js/
+!public/js/viewer-api-errors.js
