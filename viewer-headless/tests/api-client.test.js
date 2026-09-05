@@ -119,6 +119,7 @@ test('the public Linux release packages and installs the shared error policy', (
     assert.match(workflow, /viewer-headless electron\/viewer-core public\/js\/viewer-api-errors\.js/);
     assert.match(workflow, /test -f "\$extract_dir\/public\/js\/viewer-api-errors\.js"/);
     assert.match(workflow, /node -e 'require\(process\.argv\[1\]\)' "\$extract_dir\/public\/js\/viewer-api-errors\.js"/);
+    assert.match(workflow, /npm run build -- --publish never/);
     assert.match(updater, /shared_policy="\$extract_dir\/public\/js\/viewer-api-errors\.js"/);
     assert.match(updater, /cp -a "\$shared_policy" "\$INSTALL_DIR\/public\/js\/viewer-api-errors\.js"/);
     assert.match(dockerfile, /COPY public\/js\/viewer-api-errors\.js \.\/public\/js\/viewer-api-errors\.js/);
