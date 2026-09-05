@@ -62,6 +62,12 @@ mkdir -p "$extract_dir" "$INSTALL_DIR"
 curl -fsSL "$download_url" -o "$archive"
 tar -xzf "$archive" -C "$extract_dir"
 
+shared_policy="$extract_dir/public/js/viewer-api-errors.js"
+if [ ! -f "$shared_policy" ]; then
+  echo "The Linux release archive is incomplete: public/js/viewer-api-errors.js is missing." >&2
+  exit 1
+fi
+
 if [ -f "$INSTALL_DIR/.env" ]; then
   cp "$INSTALL_DIR/.env" "$tmp_dir/.env"
 fi
@@ -69,6 +75,8 @@ fi
 rm -rf "$INSTALL_DIR/viewer-headless" "$INSTALL_DIR/electron"
 cp -a "$extract_dir/viewer-headless" "$INSTALL_DIR/viewer-headless"
 cp -a "$extract_dir/electron" "$INSTALL_DIR/electron"
+mkdir -p "$INSTALL_DIR/public/js"
+cp -a "$shared_policy" "$INSTALL_DIR/public/js/viewer-api-errors.js"
 
 if [ -f "$tmp_dir/.env" ]; then
   cp "$tmp_dir/.env" "$INSTALL_DIR/.env"

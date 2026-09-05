@@ -58,7 +58,16 @@ jobs:
             --exclude='viewer-headless/profiles' \
             --exclude='viewer-headless/.env' \
             -czf dist/evosurf-viewer-headless-linux.tar.gz \
-            viewer-headless electron/viewer-core
+            viewer-headless electron/viewer-core public/js/viewer-api-errors.js
+
+      - name: Verify Linux archive runtime layout
+        shell: bash
+        run: |
+          extract_dir="$(mktemp -d)"
+          trap 'rm -rf "$extract_dir"' EXIT
+          tar -xzf dist/evosurf-viewer-headless-linux.tar.gz -C "$extract_dir"
+          test -f "$extract_dir/public/js/viewer-api-errors.js"
+          node -e 'require(process.argv[1])' "$extract_dir/public/js/viewer-api-errors.js"
 
       - name: Upload Linux archive artifact
         uses: actions/upload-artifact@v4

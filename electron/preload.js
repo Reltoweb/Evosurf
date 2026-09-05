@@ -51,6 +51,10 @@ contextBridge.exposeInMainWorld('electronViewer', {
         ipcRenderer.on('startup-error', (_event, message) => callback(message));
     },
 
+    logApiError: (payload) => {
+        ipcRenderer.send('viewer-api-error', payload);
+    },
+
     getAppVersion: () => ipcRenderer.invoke('get-app-version')
 });
 

@@ -16,6 +16,7 @@ RUN npm install --omit=dev
 WORKDIR /app
 COPY viewer-headless ./viewer-headless
 COPY electron/viewer-core ./electron/viewer-core
+COPY public/js/viewer-api-errors.js ./public/js/viewer-api-errors.js
 
 WORKDIR /app/viewer-headless
 

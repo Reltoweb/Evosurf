@@ -1,6 +1,6 @@
 {
   "name": "evosurf-viewer-headless",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "private": true,
   "description": "EvoSurf headless viewer worker for Linux and Docker",
   "main": "src/cli.js",

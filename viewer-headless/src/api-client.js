@@ -1,14 +1,17 @@
+const { createHash, randomUUID } = require('crypto');
+
 class ApiClient {
     constructor(config, logger) {
         this.config = config;
         this.logger = logger;
     }
 
-    headers(extra = {}) {
+    headers(extra = {}, requestId = randomUUID()) {
         return {
             Accept: 'application/json',
             'Content-Type': 'application/json',
             'X-Access-Key': this.config.accessKey,
+            'X-Request-ID': requestId,
             ...extra
         };
     }
@@ -17,28 +20,50 @@ class ApiClient {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), this.config.requestTimeoutMs);
         const startedAt = Date.now();
+        const clientRequestId = randomUUID();
 
         try {
             const response = await fetch(`${this.config.baseUrl}${path}`, {
                 ...options,
                 signal: controller.signal,
-                headers: this.headers(options.headers || {})
+                headers: this.headers(options.headers || {}, clientRequestId)
             });
 
             const text = await response.text();
             let data = null;
+            let validJson = true;
             if (text) {
                 try {
                     data = JSON.parse(text);
                 } catch (error) {
-                    data = { raw: text };
+                    data = null;
+                    validJson = false;
                 }
+            }
+
+            if (response.ok && text && !validJson) {
+                const protocolError = new Error('Unexpected non-JSON response');
+                protocolError.status = response.status;
+                protocolError.data = data;
+                protocolError.response = {
+                    status: response.status,
+                    data,
+                    headers: response.headers
+                };
+                this.attachObservability(protocolError, response, clientRequestId, startedAt, text);
+                throw protocolError;
             }
 
             if (!response.ok) {
                 const error = new Error(data?.error || data?.message || `HTTP ${response.status}`);
                 error.status = response.status;
                 error.data = data;
+                error.response = {
+                    status: response.status,
+                    data,
+                    headers: response.headers
+                };
+                this.attachObservability(error, response, clientRequestId, startedAt, validJson ? null : text);
                 throw error;
             }
 
@@ -48,10 +73,14 @@ class ApiClient {
                 const timeoutError = new Error(`request timeout after ${Date.now() - startedAt}ms`);
                 timeoutError.code = 'REQUEST_TIMEOUT';
                 timeoutError.path = path;
+                this.attachObservability(timeoutError, null, clientRequestId, startedAt);
                 throw timeoutError;
             }
 
             error.path = error.path || path;
+            if (!error.observability) {
+                this.attachObservability(error, null, clientRequestId, startedAt);
+            }
             throw error;
         } finally {
             clearTimeout(timeout);
@@ -89,6 +118,23 @@ class ApiClient {
                 control_capabilities: ['restart_runtime']
             })
         });
+    }
+
+    attachObservability(error, response, clientRequestId, startedAt, unexpectedBody = null) {
+        error.observability = {
+            clientRequestId,
+            requestId: response?.headers?.get?.('x-request-id') || null,
+            durationMs: Date.now() - startedAt,
+            contentType: response?.headers?.get?.('content-type') || null,
+            contentLength: this.numericHeader(response?.headers?.get?.('content-length')),
+            bodySha256: typeof unexpectedBody === 'string'
+                ? createHash('sha256').update(unexpectedBody).digest('hex')
+                : null
+        };
+    }
+
+    numericHeader(value) {
+        return /^\d+$/.test(String(value || '')) ? Number(value) : null;
     }
 
     validateVisit(viewToken) {

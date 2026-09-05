@@ -139,6 +139,31 @@ let surfVisitCounter = 0;
 const viewerLogger = createLogger('electron', { debug: debugInteractions, debugInteractions });
 let connectionReadyLogged = false;
 
+ipcMain.on('viewer-api-error', (_event, payload) => {
+    if (!payload || typeof payload !== 'object') return;
+
+    const text = (value, maximum = 128) => typeof value === 'string' ? value.slice(0, maximum) : null;
+    const number = value => Number.isFinite(Number(value)) ? Number(value) : null;
+    const safe = {
+        event: 'viewer.api_error',
+        timestamp: text(payload.timestamp, 40),
+        endpoint: text(payload.endpoint, 32),
+        status: number(payload.status),
+        error_class: text(payload.error_class, 64),
+        content_type: text(payload.content_type, 128),
+        content_length: number(payload.content_length),
+        request_id: text(payload.request_id, 40),
+        client_request_id: text(payload.client_request_id, 40),
+        duration_ms: number(payload.duration_ms),
+        attempt: number(payload.attempt),
+        backoff_ms: number(payload.backoff_ms),
+        body_sha256: /^[a-f0-9]{64}$/i.test(payload.body_sha256 || '') ? payload.body_sha256 : null,
+        occurrences_in_window: number(payload.occurrences_in_window),
+    };
+
+    viewerLogger.warn(`viewer.api_error ${JSON.stringify(safe)}`);
+});
+
 function logViewerStartup() {
     const bitness = process.arch === 'x64' ? '64-bit' : process.arch;
     const cpu = os.cpus()[0]?.model || 'Unknown CPU';

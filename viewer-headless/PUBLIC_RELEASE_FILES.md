@@ -29,6 +29,8 @@ electron/scripts/
 electron/tests/
 electron/viewer-core/
 
+public/js/viewer-api-errors.js
+
 viewer-headless/Dockerfile
 viewer-headless/DOCKERHUB_README.md
 viewer-headless/README.md
@@ -62,7 +64,7 @@ app/
 bootstrap/
 config/
 database/
-public/
+public/ (sauf public/js/viewer-api-errors.js)
 resources/
 routes/
 storage/
